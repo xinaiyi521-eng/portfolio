@@ -673,8 +673,8 @@ var BASE1="https://assets-persist.lovart.ai/pdf_extracts/975c49d81a26de11/images
 var BASE2="https://assets-persist.lovart.ai/pdf_extracts/8cbe68c459f38b4a/images/";
 var BASE3="https://assets-persist.lovart.ai/pdf_extracts/036a3fd987a7da61/images/";
 /* 图床配置：主 = 腾讯云 COS（国内节点，秒开）；回退链 = jsDelivr x2（境外）-> 本站相对路径（GitHub Pages 自带 CDN） */
-var IMG_CDN="https://cdn.jsdelivr.net/gh/xinaiyi521-eng/portfolio@66c72b7/";
-var IMG_FB=["https://gcore.jsdelivr.net/gh/xinaiyi521-eng/portfolio@66c72b7/"];
+var IMG_CDN="https://liyinxin-portfolio-2026-1521886764.cos.ap-guangzhou.myqcloud.com/";
+var IMG_FB=["https://cdn.jsdelivr.net/gh/xinaiyi521-eng/portfolio@66c72b7/","https://gcore.jsdelivr.net/gh/xinaiyi521-eng/portfolio@66c72b7/"];
 
 var PROJECTS=[
 {slug:"wudao-chalin",name:"五大禅林",category:"文创视觉系统",metaLabel:"01 / 文创视觉系统",base:BASE1,
@@ -1157,7 +1157,7 @@ function lbOpen(p,idx,seq,trigger){
     n=Math.max(1,Math.min(total,n)); /* 首/末张停在边界不循环 */
     cur=n;
     var it=list[n-1];
-    var src=/^https?:/i.test(it[0])?it[0]:(/^images\//.test(it[0])?(n%2?IMG_CDN:IMG_FB[0])+it[0]:p.base+it[0]); /* 与 addFig 同一判定，逐字复用数组里的 URL */
+    var src=/^https?:/i.test(it[0])?it[0]:(/^images\//.test(it[0])?IMG_CDN+it[0]:p.base+it[0]); /* 与 addFig 同一判定，逐字复用数组里的 URL */
     var alt=(it[2]!=null)?it[2]:(p.name+" 作品图 "+n);
     img.alt=alt;
     paint();
@@ -1286,7 +1286,7 @@ function viewIndex(){
     var hIt=(p.imgs&&p.imgs[COVER_HOVER[i]])||null;
     var hSrc=null;
     if(hIt)hSrc=/^https?:/i.test(hIt[0])?hIt[0]:(/^images\//.test(hIt[0])?IMG_CDN+hIt[0]:p.base+hIt[0]);
-    cover.appendChild(makePh((i%2?IMG_CDN:IMG_FB[0])+p.coverPage.url,p.coverPage.ratio,p.coverPage.alt,{clip:true,eager:true,rv:true,hover:hSrc,local:p.coverPage.url}));
+    cover.appendChild(makePh(IMG_CDN+p.coverPage.url,p.coverPage.ratio,p.coverPage.alt,{clip:true,eager:true,rv:true,hover:hSrc,local:p.coverPage.url}));
     cover.setAttribute("data-plx","");
     a.appendChild(cover);
     list.appendChild(a);
@@ -1356,7 +1356,7 @@ function viewDetail(p,idx){
     var it=imgList[seq-1];
     var fig=el("figure","fig");
     var alt=(it[2]!=null)?it[2]:(p.name+" 作品图 "+seq);
-    var src=/^https?:/i.test(it[0])?it[0]:(/^images\//.test(it[0])?(seq%2?IMG_CDN:IMG_FB[0])+it[0]:p.base+it[0]); /* Final pages fix：支持数组内写绝对 URL（案例 01 图源在 a.lovart.ai 域，与 p.base 不同域）；02/03 仍是裸文件名，走拼接分支，行为逐字不变 */
+    var src=/^https?:/i.test(it[0])?it[0]:(/^images\//.test(it[0])?IMG_CDN+it[0]:p.base+it[0]); /* Final pages fix：支持数组内写绝对 URL（案例 01 图源在 a.lovart.ai 域，与 p.base 不同域）；02/03 仍是裸文件名，走拼接分支，行为逐字不变 */
     var phNode=makePh(src,it[1],alt,{cap:true,eager:true,local:/^images\//.test(it[0])?it[0]:undefined});
     fig.appendChild(phNode);
     /* Interaction fix A1：.ph 之上叠一个纯透明 button（无任何可见装饰），aria-label 逐字 = 「放大查看：」+ 该图现有 alt */
