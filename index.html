@@ -12,9 +12,9 @@ Asset map:
     初判用标注 ratio（02/03 项目用 brief 散文分组），load 后一律以 intrinsic 比例校正并重排版式分组；占位底色 #EAEAEA
   page1_img2.png（丝绸之翼首张）为透明通道图形，置于 #EAEAEA 底色块上
   [Revamp 新增] 首页封面改用三个 PDF 的第 1 页整页渲染图（自然比例渲染，不裁切/不变形/无滤镜/无圆角阴影/不做 object-fit:cover）：
-    cover_page_wudao   https://assets-persist.lovart.ai/pdf_extracts/975c49d81a26de11/pages/page_1.jpg -> 首页案例 01 封面，alt「五大禅林 案例 PDF 首页整页渲染图」
-    cover_page_sishi   https://assets-persist.lovart.ai/pdf_extracts/8cbe68c459f38b4a/pages/page_1.jpg -> 首页案例 02 封面，alt「四时茶叙 案例 PDF 首页整页渲染图」
-    cover_page_sichou  https://assets-persist.lovart.ai/pdf_extracts/036a3fd987a7da61/pages/page_1.jpg -> 首页案例 03 封面，alt「丝绸之翼 案例 PDF 首页整页渲染图」
+    cover_page_wudao   images/wudao/01.jpg -> 首页案例 01 封面，alt「五大禅林 案例 PDF 首页整页渲染图」
+    cover_page_sishi   images/sishi/01.jpg -> 首页案例 02 封面，alt「四时茶叙 案例 PDF 首页整页渲染图」
+    cover_page_sichou  images/sichou/01.jpg -> 首页案例 03 封面，alt「丝绸之翼 案例 PDF 首页整页渲染图」
     三张真实像素尺寸未知：初始占位 aspect-ratio 一律 1.414（横版 PDF 页估计值），img load 回调用 naturalWidth/naturalHeight 校正为真实比例（有意的单次跳动）
     封面占栅格 3/13 -> 3/8（10 列 -> 5 列，宽约为改版前一半）
   [Revamp] 上列三行 cover_* 的 page1_img1.jpeg 已从封面位撤下、不再被任何视图引用（未移入 imgs 数组，避免重复）；
@@ -67,9 +67,9 @@ Asset map:
   [Interaction layer] 本轮零新增图片资源（不新增任何 URL、不拼参数、不加 srcset/sizes、不引用本地路径）：
     放大层（.lb）图源 = 详情页当前案例 imgs 数组里被点击的那一条（即 46 条 artifacts URL 之一）；src 在打开那一刻才赋值（同 URL，浏览器缓存命中），不预加载任何一张；
     首页封面 hover 淡入的第二层 = 从对应案例 imgs 数组按 1-based 下标取值（PROJECTS[i].imgs[n-1][0]），不另写 URL，三条备查：
-      案例 01 第 4 条 https://a.lovart.ai/artifacts/user/iGaY9dOTKvDlljAz.jpg（ratio 2048/1152，五大禅林文化研究九宫格寺庙实景）
-      案例 02 第 9 条 https://a.lovart.ai/artifacts/user/LngGmEr6dnETpGxH.jpg（ratio 2048/1152，秋冬限定插画）
-      案例 03 第 9 条 https://a.lovart.ai/artifacts/user/eB9ivJNjbPd40tVC.jpg（ratio 2048/1152，周边矩阵青绿调）
+      案例 01 第 4 条 images/wudao/04.jpg（ratio 2048/1152，五大禅林文化研究九宫格寺庙实景）
+      案例 02 第 9 条 images/sishi/09.jpg（ratio 2048/1152，秋冬限定插画）
+      案例 03 第 9 条 images/sichou/09.jpg（ratio 2048/1152，周边矩阵青绿调）
     三条与各自封面 coverPage.url（pages/page_1.jpg，实测 2048×1152）比例完全一致 -> 两层叠放零裁切零错位；
     第二层 DOM 里先只写 data-hover-src，首次 mouseenter / focusin 时才赋 src（首屏网络请求数不因本轮增加），alt="" + aria-hidden="true"（纯装饰重复信息，不新造 alt 文案）；
     全站 a.lovart.ai/artifacts/user/*.jpg 引用总数仍为 46 条（第二层从数组取值，不新增字面 URL）
@@ -678,7 +678,7 @@ var PROJECTS=[
  pdfUrl:"", /* PDF 内嵌路径已因用户提供整页图而休眠，代码保留；三案例统一走下方 imgs 分屏图序 */
  wideFigs:true, /* Final pages fix：案例 01 图幅 10 列（.figs.wide .fig{grid-column:2/12}）；02/03 不设该字段，仍 8 列 */
  cover:{file:"page1_img1.jpeg",ratio:1.78,alt:"五大禅林 封面：暖光虚焦的文创货架实景，画面中央叠白色「五大禅林」标志与编号 01"}, /* Revamp 后不再被引用（首页封面改用 coverPage） */
- coverPage:{url:"https://assets-persist.lovart.ai/pdf_extracts/975c49d81a26de11/pages/page_1.jpg",ratio:1.414,alt:"五大禅林 案例 PDF 首页整页渲染图"},
+ coverPage:{url:"images/wudao/01.jpg",ratio:1.414,alt:"五大禅林 案例 PDF 首页整页渲染图"},
  pages:{hash:"975c49d81a26de11",count:14,confirmed:[1],ratio:2048/1152}, /* 整页图源：实测仅 page_1 存在（2048×1152），page_2 起 404，故详情页不可用整页图；保留此字段供资产补齐后启用 */
  intro:[
   {t:"本项目立足千山核心文化符号“五大禅林”——祖越寺、中会寺、香岩寺、大安寺、龙泉寺的历史文化资源，针对景区现有文创产品文化叙事单一、符号辨识度不足的问题展开。"},
@@ -689,20 +689,20 @@ var PROJECTS=[
   /* Final pages：案例 01 详情页图源 = 用户导出的 14 张整页图（绝对 URL 逐字照抄，见顶部 Asset map [Final pages]）；
      原始导出文件名依次 = 作品集封面-04 … -17（导出批次编号，仅备查，不入 alt）；
      第 14 张 2048×1375 与其余 13 张 2048×1152 比例不同，是刻意事实，不归一化、不裁切补齐 */
-  ["https://a.lovart.ai/artifacts/user/KQmi9RYFPS29n5rD.jpg",2048/1152,"五大禅林 详情页作品图 1"],
-  ["https://a.lovart.ai/artifacts/user/M2PzLuh50V740EZM.jpg",2048/1152,"五大禅林 详情页作品图 2"],
-  ["https://a.lovart.ai/artifacts/user/hgqeWfTqGH6m4OBn.jpg",2048/1152,"五大禅林 详情页作品图 3"],
-  ["https://a.lovart.ai/artifacts/user/iGaY9dOTKvDlljAz.jpg",2048/1152,"五大禅林 详情页作品图 4"],
-  ["https://a.lovart.ai/artifacts/user/SQEksKLqv55jkxmW.jpg",2048/1152,"五大禅林 详情页作品图 5"],
-  ["https://a.lovart.ai/artifacts/user/8tGNVr7p2KFh9Qil.jpg",2048/1152,"五大禅林 详情页作品图 6"],
-  ["https://a.lovart.ai/artifacts/user/yc6OG3BEk2A2IvtY.jpg",2048/1152,"五大禅林 详情页作品图 7"],
-  ["https://a.lovart.ai/artifacts/user/rQM5OwA3owLFpHxO.jpg",2048/1152,"五大禅林 详情页作品图 8"],
-  ["https://a.lovart.ai/artifacts/user/XwSk8DWrW55cPKdZ.jpg",2048/1152,"五大禅林 详情页作品图 9"],
-  ["https://a.lovart.ai/artifacts/user/Qs15znNRnzAVR9kI.jpg",2048/1152,"五大禅林 详情页作品图 10"],
-  ["https://a.lovart.ai/artifacts/user/cWWALwdVEwL6lmjw.jpg",2048/1152,"五大禅林 详情页作品图 11"],
-  ["https://a.lovart.ai/artifacts/user/BdoDyX0gXJJF2x7m.jpg",2048/1152,"五大禅林 详情页作品图 12"],
-  ["https://a.lovart.ai/artifacts/user/eXdSzfBPrD91lQKK.jpg",2048/1152,"五大禅林 详情页作品图 13"],
-  ["https://a.lovart.ai/artifacts/user/iGuQpsNBwtI1ZL7O.jpg",2048/1375,"五大禅林 详情页作品图 14"]],
+  ["images/wudao/01.jpg",2048/1152,"五大禅林 详情页作品图 1"],
+  ["images/wudao/02.jpg",2048/1152,"五大禅林 详情页作品图 2"],
+  ["images/wudao/03.jpg",2048/1152,"五大禅林 详情页作品图 3"],
+  ["images/wudao/04.jpg",2048/1152,"五大禅林 详情页作品图 4"],
+  ["images/wudao/05.jpg",2048/1152,"五大禅林 详情页作品图 5"],
+  ["images/wudao/06.jpg",2048/1152,"五大禅林 详情页作品图 6"],
+  ["images/wudao/07.jpg",2048/1152,"五大禅林 详情页作品图 7"],
+  ["images/wudao/08.jpg",2048/1152,"五大禅林 详情页作品图 8"],
+  ["images/wudao/09.jpg",2048/1152,"五大禅林 详情页作品图 9"],
+  ["images/wudao/10.jpg",2048/1152,"五大禅林 详情页作品图 10"],
+  ["images/wudao/11.jpg",2048/1152,"五大禅林 详情页作品图 11"],
+  ["images/wudao/12.jpg",2048/1152,"五大禅林 详情页作品图 12"],
+  ["images/wudao/13.jpg",2048/1152,"五大禅林 详情页作品图 13"],
+  ["images/wudao/14.jpg",2048/1375,"五大禅林 详情页作品图 14"]],
  /* 旧方案：PDF 内嵌抠图（漏第 5/6/10-14 页），本轮起详情页改用用户导出的 14 张整页图；此数组保留仅作回退参考，不再被引用 */
  imgsLegacy:[
   ["page2_img2.jpeg",0.74,"店面文创产品货架实景"],
@@ -725,7 +725,7 @@ var PROJECTS=[
  pdfUrl:"", /* PDF embed：本轮不赋值 -> 继续走下方 imgs 图序路径；补上 URL 即自动启用查看器，无需改逻辑 */
  wideFigs:true, /* Final pages 02 fix：案例 02 图幅 10 列（.figs.wide .fig{grid-column:2/12}），与案例 01 同一字段同一机制；案例 03 不设该字段，仍 8 列 */
  cover:{file:"page1_img1.jpeg",ratio:1.77,alt:"四时茶叙 封面：翠绿茶园与蓝天白云实景，中央白色四季图形 Logo 与「四时茶叙」字样"}, /* Revamp 后不再被引用（首页封面改用 coverPage） */
- coverPage:{url:"https://assets-persist.lovart.ai/pdf_extracts/8cbe68c459f38b4a/pages/page_1.jpg",ratio:1.414,alt:"四时茶叙 案例 PDF 首页整页渲染图"},
+ coverPage:{url:"images/sishi/01.jpg",ratio:1.414,alt:"四时茶叙 案例 PDF 首页整页渲染图"},
  pages:{hash:"8cbe68c459f38b4a",count:17,confirmed:[1],ratio:2048/1152}, /* 整页图源：实测仅 page_1 存在（2048×1152），page_2 起 404，故详情页不可用整页图；保留此字段供资产补齐后启用 */
  intro:[
   {t:"“四时茶叙”是以四季风物入茶的新式茶饮品牌，主打松弛社交与本真茶味，品牌理念为“时萃·循季寻味”“鲜采·原叶本香”“茶叙·以茶会友”“慢品·静享闲时”。"},
@@ -735,23 +735,23 @@ var PROJECTS=[
   /* Final pages 02：案例 02 详情页图源 = 用户导出的 17 张整页图（绝对 URL 逐字照抄，见顶部 Asset map [Final pages 02]）；
      原始导出文件名依次 = 作品集封面-18 … -34（导出批次编号，仅备查，不入 alt）；
      第 12 张 2047×1153 与其余 16 张 2048×1152 比例不同，是刻意事实（导出时的一像素差异），不归一化、不裁切补齐 */
-  ["https://a.lovart.ai/artifacts/user/d6aAPwpm9o1W7GVG.jpg",2048/1152,"四时茶叙 详情页作品图 1"],
-  ["https://a.lovart.ai/artifacts/user/4GT5W0Pbnu9Sohkc.jpg",2048/1152,"四时茶叙 详情页作品图 2"],
-  ["https://a.lovart.ai/artifacts/user/u5tOzcjiibL1mXZe.jpg",2048/1152,"四时茶叙 详情页作品图 3"],
-  ["https://a.lovart.ai/artifacts/user/ukh9nuPZX7GKMaJA.jpg",2048/1152,"四时茶叙 详情页作品图 4"],
-  ["https://a.lovart.ai/artifacts/user/K9vdeLCIz7Cud6ag.jpg",2048/1152,"四时茶叙 详情页作品图 5"],
-  ["https://a.lovart.ai/artifacts/user/s8nG9AH7Nc2nDyaH.jpg",2048/1152,"四时茶叙 详情页作品图 6"],
-  ["https://a.lovart.ai/artifacts/user/AP6IMtZBb9JhMvGA.jpg",2048/1152,"四时茶叙 详情页作品图 7"],
-  ["https://a.lovart.ai/artifacts/user/luFX2Kcdaa5SKyWR.jpg",2048/1152,"四时茶叙 详情页作品图 8"],
-  ["https://a.lovart.ai/artifacts/user/LngGmEr6dnETpGxH.jpg",2048/1152,"四时茶叙 详情页作品图 9"],
-  ["https://a.lovart.ai/artifacts/user/15abEuy28G8d1NDo.jpg",2048/1152,"四时茶叙 详情页作品图 10"],
-  ["https://a.lovart.ai/artifacts/user/RFnsTjAHsXA7cPAp.jpg",2048/1152,"四时茶叙 详情页作品图 11"],
-  ["https://a.lovart.ai/artifacts/user/6y2MXMTQSK5CD0UE.jpg",2047/1153,"四时茶叙 详情页作品图 12"],
-  ["https://a.lovart.ai/artifacts/user/mPzpdRV4HRGGiaHl.jpg",2048/1152,"四时茶叙 详情页作品图 13"],
-  ["https://a.lovart.ai/artifacts/user/XvjwVMOClp73lrA7.jpg",2048/1152,"四时茶叙 详情页作品图 14"],
-  ["https://a.lovart.ai/artifacts/user/JsKicrytSjLJoZLt.jpg",2048/1152,"四时茶叙 详情页作品图 15"],
-  ["https://a.lovart.ai/artifacts/user/8M1MS8C9Oi1POJL3.jpg",2048/1152,"四时茶叙 详情页作品图 16"],
-  ["https://a.lovart.ai/artifacts/user/5mOOuV0v9SGqcdKH.jpg",2048/1152,"四时茶叙 详情页作品图 17"]],
+  ["images/sishi/01.jpg",2048/1152,"四时茶叙 详情页作品图 1"],
+  ["images/sishi/02.jpg",2048/1152,"四时茶叙 详情页作品图 2"],
+  ["images/sishi/03.jpg",2048/1152,"四时茶叙 详情页作品图 3"],
+  ["images/sishi/04.jpg",2048/1152,"四时茶叙 详情页作品图 4"],
+  ["images/sishi/05.jpg",2048/1152,"四时茶叙 详情页作品图 5"],
+  ["images/sishi/06.jpg",2048/1152,"四时茶叙 详情页作品图 6"],
+  ["images/sishi/07.jpg",2048/1152,"四时茶叙 详情页作品图 7"],
+  ["images/sishi/08.jpg",2048/1152,"四时茶叙 详情页作品图 8"],
+  ["images/sishi/09.jpg",2048/1152,"四时茶叙 详情页作品图 9"],
+  ["images/sishi/10.jpg",2048/1152,"四时茶叙 详情页作品图 10"],
+  ["images/sishi/11.jpg",2048/1152,"四时茶叙 详情页作品图 11"],
+  ["images/sishi/12.jpg",2047/1153,"四时茶叙 详情页作品图 12"],
+  ["images/sishi/13.jpg",2048/1152,"四时茶叙 详情页作品图 13"],
+  ["images/sishi/14.jpg",2048/1152,"四时茶叙 详情页作品图 14"],
+  ["images/sishi/15.jpg",2048/1152,"四时茶叙 详情页作品图 15"],
+  ["images/sishi/16.jpg",2048/1152,"四时茶叙 详情页作品图 16"],
+  ["images/sishi/17.jpg",2048/1152,"四时茶叙 详情页作品图 17"]],
  /* 旧方案：PDF 内嵌抠图（漏页且同页多图按图元存储序），本轮起详情页改用用户导出的 17 张整页图；此数组保留仅作回退参考，不再被引用 */
  imgsLegacy:[
   ["page2_img2.jpeg",1.7],["page3_img3.jpeg",1.7],
@@ -773,7 +773,7 @@ var PROJECTS=[
  pdfUrl:"", /* PDF embed：本轮不赋值 -> 继续走下方 imgs 图序路径；补上 URL 即自动启用查看器，无需改逻辑 */
  wideFigs:true, /* Final pages 03 fix：案例 03 图幅 10 列（.figs.wide .fig{grid-column:2/12}），与案例 01/02 同一字段同一机制；至此三案例图幅统一 */
  cover:{file:"page1_img1.jpeg",ratio:1.78,alt:"丝绸之翼 封面：落日沙丘与驼队剪影，中央白色翼马图形与「丝绸之翼」字样"}, /* Revamp 后不再被引用（首页封面改用 coverPage） */
- coverPage:{url:"https://assets-persist.lovart.ai/pdf_extracts/036a3fd987a7da61/pages/page_1.jpg",ratio:1.414,alt:"丝绸之翼 案例 PDF 首页整页渲染图"},
+ coverPage:{url:"images/sichou/01.jpg",ratio:1.414,alt:"丝绸之翼 案例 PDF 首页整页渲染图"},
  pages:{hash:"036a3fd987a7da61",count:15,confirmed:[1],ratio:2048/1152}, /* 整页图源：实测仅 page_1 存在（2048×1152），page_2 起 404，故详情页不可用整页图；保留此字段供资产补齐后启用 */
  intro:[
   {t:"《丝绸之翼》为校企合作系列文创产品设计项目，以敦煌市博物馆的馆藏资源为文化底座，核心目标是让丝路意象“活起来、走出去”。"},
@@ -785,21 +785,21 @@ var PROJECTS=[
      原始导出文件名依次 = 作品集封面-35 … -49（导出批次编号，仅备查，不入 alt）；
      本轮 15 条 ratio 全部为 2048/1152（≈1.7778），无一异形 —— 与案例 01 第 14 张（2048/1375）、案例 02 第 12 张（2047/1153）
      的刻意差异不同，此处「全部一致」是本轮事实，不为与前两案例对齐而制造差异、不归一化、不裁切补齐 */
-  ["https://a.lovart.ai/artifacts/user/S1YZtZYJDh6SkKPD.jpg",2048/1152,"丝绸之翼 详情页作品图 1"],
-  ["https://a.lovart.ai/artifacts/user/mAgH5sDjCXFOml2F.jpg",2048/1152,"丝绸之翼 详情页作品图 2"],
-  ["https://a.lovart.ai/artifacts/user/G6eQIGB0VAEjSLdW.jpg",2048/1152,"丝绸之翼 详情页作品图 3"],
-  ["https://a.lovart.ai/artifacts/user/Rj5AEIA4lMFeh9nh.jpg",2048/1152,"丝绸之翼 详情页作品图 4"],
-  ["https://a.lovart.ai/artifacts/user/YC5ZlRCW9NHTAbCh.jpg",2048/1152,"丝绸之翼 详情页作品图 5"],
-  ["https://a.lovart.ai/artifacts/user/4YZzKZSAEL1Zc2oB.jpg",2048/1152,"丝绸之翼 详情页作品图 6"],
-  ["https://a.lovart.ai/artifacts/user/GYuo2wog5N9t4Nos.jpg",2048/1152,"丝绸之翼 详情页作品图 7"],
-  ["https://a.lovart.ai/artifacts/user/WcLbyboHU53vpybd.jpg",2048/1152,"丝绸之翼 详情页作品图 8"],
-  ["https://a.lovart.ai/artifacts/user/eB9ivJNjbPd40tVC.jpg",2048/1152,"丝绸之翼 详情页作品图 9"],
-  ["https://a.lovart.ai/artifacts/user/kAKBoftfoN8qrt0Q.jpg",2048/1152,"丝绸之翼 详情页作品图 10"],
-  ["https://a.lovart.ai/artifacts/user/NcgJuL1VP9EQ3X3C.jpg",2048/1152,"丝绸之翼 详情页作品图 11"],
-  ["https://a.lovart.ai/artifacts/user/kwGRAb09RA5RQliI.jpg",2048/1152,"丝绸之翼 详情页作品图 12"],
-  ["https://a.lovart.ai/artifacts/user/iy3qlz5Vq1A0PGYP.jpg",2048/1152,"丝绸之翼 详情页作品图 13"],
-  ["https://a.lovart.ai/artifacts/user/uz2APyp6ST7vEZFM.jpg",2048/1152,"丝绸之翼 详情页作品图 14"],
-  ["https://a.lovart.ai/artifacts/user/kVUQI537229zB4xT.jpg",2048/1152,"丝绸之翼 详情页作品图 15"]],
+  ["images/sichou/01.jpg",2048/1152,"丝绸之翼 详情页作品图 1"],
+  ["images/sichou/02.jpg",2048/1152,"丝绸之翼 详情页作品图 2"],
+  ["images/sichou/03.jpg",2048/1152,"丝绸之翼 详情页作品图 3"],
+  ["images/sichou/04.jpg",2048/1152,"丝绸之翼 详情页作品图 4"],
+  ["images/sichou/05.jpg",2048/1152,"丝绸之翼 详情页作品图 5"],
+  ["images/sichou/06.jpg",2048/1152,"丝绸之翼 详情页作品图 6"],
+  ["images/sichou/07.jpg",2048/1152,"丝绸之翼 详情页作品图 7"],
+  ["images/sichou/08.jpg",2048/1152,"丝绸之翼 详情页作品图 8"],
+  ["images/sichou/09.jpg",2048/1152,"丝绸之翼 详情页作品图 9"],
+  ["images/sichou/10.jpg",2048/1152,"丝绸之翼 详情页作品图 10"],
+  ["images/sichou/11.jpg",2048/1152,"丝绸之翼 详情页作品图 11"],
+  ["images/sichou/12.jpg",2048/1152,"丝绸之翼 详情页作品图 12"],
+  ["images/sichou/13.jpg",2048/1152,"丝绸之翼 详情页作品图 13"],
+  ["images/sichou/14.jpg",2048/1152,"丝绸之翼 详情页作品图 14"],
+  ["images/sichou/15.jpg",2048/1152,"丝绸之翼 详情页作品图 15"]],
  /* 旧方案：PDF 内嵌抠图（15 页 PDF 抠出 37 条，同页多图被拆开且存在漏页），本轮起详情页改用用户导出的 15 张整页图；此数组保留仅作回退参考，不再被引用 */
  imgsLegacy:[
   ["page1_img2.png",1.0],
@@ -1146,7 +1146,7 @@ function lbOpen(p,idx,seq,trigger){
     n=Math.max(1,Math.min(total,n)); /* 首/末张停在边界不循环 */
     cur=n;
     var it=list[n-1];
-    var src=/^https?:/i.test(it[0])?it[0]:p.base+it[0]; /* 与 addFig 同一判定，逐字复用数组里的 URL */
+    var src=/^(https?:|images\/)/i.test(it[0])?it[0]:p.base+it[0]; /* 与 addFig 同一判定，逐字复用数组里的 URL */
     var alt=(it[2]!=null)?it[2]:(p.name+" 作品图 "+n);
     img.alt=alt;
     paint();
@@ -1274,7 +1274,7 @@ function viewIndex(){
        DOM 里先只写 data-hover-src，首次 mouseenter / focusin 时才赋 src（首屏零额外请求）；两层均在 transform 容器内 */
     var hIt=(p.imgs&&p.imgs[COVER_HOVER[i]])||null;
     var hSrc=null;
-    if(hIt)hSrc=/^https?:/i.test(hIt[0])?hIt[0]:p.base+hIt[0];
+    if(hIt)hSrc=/^(https?:|images\/)/i.test(hIt[0])?hIt[0]:p.base+hIt[0];
     cover.appendChild(makePh(p.coverPage.url,p.coverPage.ratio,p.coverPage.alt,{clip:true,eager:i===0,rv:true,hover:hSrc}));
     cover.setAttribute("data-plx","");
     a.appendChild(cover);
@@ -1345,7 +1345,7 @@ function viewDetail(p,idx){
     var it=imgList[seq-1];
     var fig=el("figure","fig");
     var alt=(it[2]!=null)?it[2]:(p.name+" 作品图 "+seq);
-    var src=/^https?:/i.test(it[0])?it[0]:p.base+it[0]; /* Final pages fix：支持数组内写绝对 URL（案例 01 图源在 a.lovart.ai 域，与 p.base 不同域）；02/03 仍是裸文件名，走拼接分支，行为逐字不变 */
+    var src=/^(https?:|images\/)/i.test(it[0])?it[0]:p.base+it[0]; /* Final pages fix：支持数组内写绝对 URL（案例 01 图源在 a.lovart.ai 域，与 p.base 不同域）；02/03 仍是裸文件名，走拼接分支，行为逐字不变 */
     var phNode=makePh(src,it[1],alt,{cap:true,eager:seq<=2});
     fig.appendChild(phNode);
     /* Interaction fix A1：.ph 之上叠一个纯透明 button（无任何可见装饰），aria-label 逐字 = 「放大查看：」+ 该图现有 alt */
