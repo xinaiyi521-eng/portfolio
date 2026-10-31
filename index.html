@@ -1,0 +1,1628 @@
+<!DOCTYPE html><html lang="zh-CN" data-lvt-canonical="1"><head>
+<!--
+Canvas: 单页应用式作品集网站，桌面基准 1440px，最小适配 320px；四视图 hash 路由 #/ 、#/about 、#/work/{slug}×3
+Design given: 1:1 复刻 joffreyspitzer.com 的极简瑞士排版气质——固定 64px 顶/底栏、12 列栅格、超大 Display 标题、
+  列表式案例索引、关于页双栏（左获奖列表 / 右大标题+简介，两栏顶对齐）、详情页宽窄交替图序；仅黑白灰 + 简介色板例外
+Asset map:
+  cover_wudao  https://assets-persist.lovart.ai/pdf_extracts/975c49d81a26de11/images/page1_img1.jpeg (标注 ratio≈1.99，实测 2304×1296≈1.78)
+    -> 首页案例 01 封面（栅格 3–13 列，width:100%;height:auto 自然比例，不裁切/不圆角/不阴影/无滤镜）+ 该详情页简介下通栏大图；容器按 ratio 预留 aspect-ratio 防抖动，load 后以 naturalWidth/naturalHeight 校正
+  cover_sishi  .../8cbe68c459f38b4a/images/page1_img1.jpeg (标注≈2.18，实测 4929×2778≈1.77) -> 首页案例 02 封面 + 详情页大图，同上
+  cover_sichou .../036a3fd987a7da61/images/page1_img1.jpeg (标注≈2.17，实测 5217×2937≈1.78) -> 首页案例 03 封面 + 详情页大图，同上
+  详情页图序 49/39/37 张：base + 文件名逐字按 brief 顺序；ratio≥1.4 通栏(1–13 列)，<1.4 走 6 列左右交错(奇左 1–6 / 偶右 7–13)；
+    初判用标注 ratio（02/03 项目用 brief 散文分组），load 后一律以 intrinsic 比例校正并重排版式分组；占位底色 #EAEAEA
+  page1_img2.png（丝绸之翼首张）为透明通道图形，置于 #EAEAEA 底色块上
+  [Revamp 新增] 首页封面改用三个 PDF 的第 1 页整页渲染图（自然比例渲染，不裁切/不变形/无滤镜/无圆角阴影/不做 object-fit:cover）：
+    cover_page_wudao   https://assets-persist.lovart.ai/pdf_extracts/975c49d81a26de11/pages/page_1.jpg -> 首页案例 01 封面，alt「五大禅林 案例 PDF 首页整页渲染图」
+    cover_page_sishi   https://assets-persist.lovart.ai/pdf_extracts/8cbe68c459f38b4a/pages/page_1.jpg -> 首页案例 02 封面，alt「四时茶叙 案例 PDF 首页整页渲染图」
+    cover_page_sichou  https://assets-persist.lovart.ai/pdf_extracts/036a3fd987a7da61/pages/page_1.jpg -> 首页案例 03 封面，alt「丝绸之翼 案例 PDF 首页整页渲染图」
+    三张真实像素尺寸未知：初始占位 aspect-ratio 一律 1.414（横版 PDF 页估计值），img load 回调用 naturalWidth/naturalHeight 校正为真实比例（有意的单次跳动）
+    封面占栅格 3/13 -> 3/8（10 列 -> 5 列，宽约为改版前一半）
+  [Revamp] 上列三行 cover_* 的 page1_img1.jpeg 已从封面位撤下、不再被任何视图引用（未移入 imgs 数组，避免重复）；
+    详情页简介下方的通栏封面大图位 #coverSlot 整块删除
+  [Revamp] 详情页图序改为单列全量按序：49/39/37 张 URL、文件名、数组下标、顺序逐条未动，但一律 grid-column:3/11（8 列宽、居中留白），
+    取消 ratio≥1.4 通栏 / <1.4 左右交错的整套分组逻辑；图间距统一 margin-top:40px
+  [Revamp] 防模糊上限：每张详情图实际渲染宽度 = min(naturalWidth, 父容器 clientWidth)，窄图 margin-inline:auto 居中不被拉大；
+    不用 object-fit / transform:scale / .ph 固定高度；不加 srcset、sizes 与任何降采样/压缩参数拼接；resize 去抖重算该上限
+  [Revamp] 详情页图片一律取消滚动视差（.fig 上的 data-plx 与 plxWatch/plxForget 调用已删除）；首页封面 case-cover 上的 data-plx 视差保留不变
+  [Revamp2 新增] 详情页图序改用 PDF 逐页整页图，URL 模板 https://assets-persist.lovart.ai/pdf_extracts/<hash>/pages/page_N.jpg（N=1..count，每页一张）：
+    wudao-chalin hash=975c49d81a26de11 count=14 / sishi-chaxu hash=8cbe68c459f38b4a count=17 / sichou-zhiyi hash=036a3fd987a7da61 count=15
+    探测协议采用路径 = 构建期探测：写入前对 46 个候选逐页探测（load=存在 / error=不存在）；结果三项目均仅 page_1 确认存在
+    （实测 2048×1152，即首页封面 coverPage.url 正引用的那张），page_2..page_count 全部 404 NoSuchKey -> 确认页号固化为 pages.confirmed=[1]，
+    未经确认的 URL 一律不进 DOM；缺失页号在交付报告与详情页挂载 console.warn 中如实暴露；占位比例用探测实测 2048/1152≈1.7778（pages.ratio）
+    imgsLegacy 停用原因：抠图漏掉五大禅林第 5/6/10-14 页等实景内容页，且同页多图先后按图元存储序而非版面序，无法满足「按 PDF 页序展示完整图片」
+  [Revamp2 revert] 上列 [Revamp2 新增] 整段已回滚、不再被渲染代码引用（原因见下方 Revamp2 revert 段）：详情页图序恢复为上列
+    「详情页图序 49/39/37 张」的 PDF 内嵌图（imgs 数组）；仅 page_1.jpg 三张继续用作首页封面（coverPage.url，实测 2048×1152，仍有效）
+  [PDF embed] 案例 01「五大禅林」详情页图源改为 PDF 原件内嵌：https://a.lovart.ai/artifacts/user/dx27WWvnZg788F7w.pdf（逐字，不拼参数）
+    -> <iframe class="pdfframe"> 装入 .pdfview（grid-column:2/12，高 calc(100vh - var(--bar-h) - 140px)/min 560px，底色 --ph，无边框/圆角/阴影），
+    14 页按原顺序完整展示、浏览器原生缩放不发糊；下方「在新标签页打开原件 ↗」外链同一 URL；打印态输出明文 URL
+    回退图源 = PROJECTS[0].imgs 49 条（逐字未动）：iframe 3000ms 内未触发 onload 即移除查看器、按 02/03 项目同款分屏图序渲染并如实标注缺失页
+    案例 02/03 本次 pdfUrl:""（空串）仍走各自 imgs 39/37 条图序；机制数据驱动（if(p.pdfUrl)…），后续补 URL 即启用、无需改逻辑
+  [Final pages] 案例 01 详情页图源改为用户导出的 14 张整页图（绝对 URL，逐字照抄）：
+    https://a.lovart.ai/artifacts/user/ 下 KQmi9RYFPS29n5rD / M2PzLuh50V740EZM / hgqeWfTqGH6m4OBn / iGaY9dOTKvDlljAz / SQEksKLqv55jkxmW /
+    8tGNVr7p2KFh9Qil / yc6OG3BEk2A2IvtY / rQM5OwA3owLFpHxO / XwSk8DWrW55cPKdZ / Qs15znNRnzAVR9kI / cWWALwdVEwL6lmjw / BdoDyX0gXJJF2x7m /
+    eXdSzfBPrD91lQKK（以上 13 张 2048×1152）/ iGuQpsNBwtI1ZL7O（2048×1375），均 .jpg，顺序 1→14 严格对应用户给定表格；
+    原始导出文件名对应关系（备查，不入 alt）：第 1..14 张依次 = 作品集封面-04..-17（详见下方 Final pages fix 段）；
+    -> PROJECTS[0].imgs 整体替换，alt 机械生成「五大禅林 详情页作品图 {N}」；imgsLegacy（原 49 条）停用保留；PDF 内嵌路径休眠（代码保留）；
+    案例 01 图幅 10 列（wideFigs -> .figs.wide .fig{grid-column:2/12}，窄屏回落 1/-1），02/03 保持 8 列（3/11）
+  [Final pages 02] 案例 02「四时茶叙」详情页图源改为用户导出的 17 张整页图（绝对 URL，逐字照抄，与案例 01 同一机制、同一 wideFigs 字段）：
+    https://a.lovart.ai/artifacts/user/ 下 d6aAPwpm9o1W7GVG / 4GT5W0Pbnu9Sohkc / u5tOzcjiibL1mXZe / ukh9nuPZX7GKMaJA / K9vdeLCIz7Cud6ag /
+    s8nG9AH7Nc2nDyaH / AP6IMtZBb9JhMvGA / luFX2Kcdaa5SKyWR / LngGmEr6dnETpGxH / 15abEuy28G8d1NDo / RFnsTjAHsXA7cPAp / 6y2MXMTQSK5CD0UE /
+    mPzpdRV4HRGGiaHl / XvjwVMOClp73lrA7 / JsKicrytSjLJoZLt / 8M1MS8C9Oi1POJL3 / 5mOOuV0v9SGqcdKH，均 .jpg，顺序 1→17 严格对应用户给定表格；
+    像素尺寸：第 12 张（6y2MXMTQSK5CD0UE）为 2047×1153 —— 刻意差异（导出时的一像素差），ratio 原样写 2047/1153，不归一化不裁切补齐；
+    其余 16 张均 2048×1152，ratio 写 2048/1152（与案例 01 第 14 张的 2048/1375 同属「刻意不同的比例」一类）；
+    原始导出文件名对应关系（备查，不入 alt）：第 1..17 张依次 = 作品集封面-18..-34（详见下方 Final pages 02 fix 段）；
+    -> PROJECTS[1].imgs 整体替换（原 39 条 PDF 抠图停用、重命名为 imgsLegacy 保留），alt 机械生成「四时茶叙 详情页作品图 {N}」；
+    PDF 内嵌路径仍休眠（pdfUrl:""，代码保留）；案例 02 图幅 10 列（新增 wideFigs:true，复用既有 .figs.wide 规则与窄屏补条，未新增任何 CSS）；
+    案例 03（丝绸之翼）本轮未动：仍 37 条裸文件名 imgs（走 p.base 拼接）、无 wideFigs、图幅 8 列（.fig{grid-column:3/11}）
+  [Final pages 03] 案例 03「丝绸之翼」详情页图源改为用户导出的 15 张整页图（绝对 URL，逐字照抄，与案例 01/02 同一机制、同一 wideFigs 字段）：
+    https://a.lovart.ai/artifacts/user/ 下 S1YZtZYJDh6SkKPD / mAgH5sDjCXFOml2F / G6eQIGB0VAEjSLdW / Rj5AEIA4lMFeh9nh / YC5ZlRCW9NHTAbCh /
+    4YZzKZSAEL1Zc2oB / GYuo2wog5N9t4Nos / WcLbyboHU53vpybd / eB9ivJNjbPd40tVC / kAKBoftfoN8qrt0Q / NcgJuL1VP9EQ3X3C / kwGRAb09RA5RQliI /
+    iy3qlz5Vq1A0PGYP / uz2APyp6ST7vEZFM / kVUQI537229zB4xT，均 .jpg，顺序 1→15 严格对应用户给定表格；
+    像素尺寸：15 张全部为 2048×1152，ratio 一律写 2048/1152（≈1.7778）—— 本轮【无一异形】，既不像案例 01 第 14 张（2048/1375）
+    也不像案例 02 第 12 张（2047/1153）那样存在刻意差异，不为与前两案例对齐而制造差异、不归一化、不裁切补齐；
+    原始导出文件名对应关系（备查，不入 alt）：第 1..15 张依次 = 作品集封面-35..-49（详见下方 Final pages 03 fix 段）；
+    -> PROJECTS[2].imgs 整体替换（原 37 条 PDF 抠图停用、重命名为 imgsLegacy 保留），alt 机械生成「丝绸之翼 详情页作品图 {N}」；
+    PDF 内嵌路径仍休眠（pdfUrl:""，代码保留）；案例 03 图幅接入 10 列（新增 wideFigs:true，复用既有 .figs.wide 规则与窄屏补条，零新增 CSS）；
+    至此三个案例详情页图源全部为用户导出的整页图（14+17+15=46 条 artifacts URL）、图幅统一 10 列
+  [Interaction layer] 本轮零新增图片资源（不新增任何 URL、不拼参数、不加 srcset/sizes、不引用本地路径）：
+    放大层（.lb）图源 = 详情页当前案例 imgs 数组里被点击的那一条（即 46 条 artifacts URL 之一）；src 在打开那一刻才赋值（同 URL，浏览器缓存命中），不预加载任何一张；
+    首页封面 hover 淡入的第二层 = 从对应案例 imgs 数组按 1-based 下标取值（PROJECTS[i].imgs[n-1][0]），不另写 URL，三条备查：
+      案例 01 第 4 条 https://a.lovart.ai/artifacts/user/iGaY9dOTKvDlljAz.jpg（ratio 2048/1152，五大禅林文化研究九宫格寺庙实景）
+      案例 02 第 9 条 https://a.lovart.ai/artifacts/user/LngGmEr6dnETpGxH.jpg（ratio 2048/1152，秋冬限定插画）
+      案例 03 第 9 条 https://a.lovart.ai/artifacts/user/eB9ivJNjbPd40tVC.jpg（ratio 2048/1152，周边矩阵青绿调）
+    三条与各自封面 coverPage.url（pages/page_1.jpg，实测 2048×1152）比例完全一致 -> 两层叠放零裁切零错位；
+    第二层 DOM 里先只写 data-hover-src，首次 mouseenter / focusin 时才赋 src（首屏网络请求数不因本轮增加），alt="" + aria-hidden="true"（纯装饰重复信息，不新造 alt 文案）；
+    全站 a.lovart.ai/artifacts/user/*.jpg 引用总数仍为 46 条（第二层从数组取值，不新增字面 URL）
+Palette: --bg #F4F4F4 / --fg #111111 / --fg2 #8A8A8A / --line #DCDCDC / --ph #EAEAEA（brief 全给定，无自取色）；
+  色板方块仅出现在 detail.intro「标准色」条目内，用各 HEX 本色
+Typography: 栈 "Helvetica Neue","Neue Haas Grotesk Display Pro","PingFang SC","Noto Sans SC","Microsoft YaHei",Arial,sans-serif（brief 给定，不引 webfont，离线可用）；
+  Display clamp(72px,12vw,168px)/500/0.92/-0.03em；H2 clamp(28px,3.2vw,44px)/500/1.08/-0.02em；Body 16px/1.62/max 46ch；
+  Label 11px/500/#8A8A8A，中文不加字距（letter-spacing:0），纯数字/拉丁 Label 用 0.14em
+Content map: 顶栏左「李因炘」、右「作品」「关于」+「品牌/文创/平面」；首页 meta=index.meta 逐字、tagline=index.tagline 逐字、
+  三案例名/编号/类别=index.cases 逐字；关于 bio 按句号切 4 个 <p> 逐字、awards 10 条逐字（表头 赛事/作品与奖项；[Revamp] 表头改三列「赛事/作品/奖项」，右列按全角空格拆作品+等级，见 Revamp fix）；
+  详情 intro 逐字（色板条目渲染为小方块+HEX 文字）；footer 左「品牌 / 文创 / 平面设计」右三行联系方式逐字（tel:/mailto:，微信纯文本）；
+  document.title 按路由映射
+Assumptions（brief 未明处的最朴素选择）:
+  - 底栏「固定」理解为每视图内容收尾处的常设栏（in-flow，min-height 64px），内容区底部预留 96px，不遮挡内容；顶栏为 position:fixed 无背景
+  - 「返回」链接绝对定位于视图右上、顶栏基线下 24px；关于页左栏与右栏 Display 标题顶部同水平线起（brief 关键特征；左栏 margin-top 按 Display 字号等比补偿行盒负 half-leading：calc(var(--display-fs)*-0.113)，1440 实测对齐）
+  - 首页封面 hover：容器 overflow:hidden + transform-origin:center + scale(1.035)/0.9s，静止态零裁切，缩放仅发生在图片自身矩形内、不露白边
+  - 半栏图交错序按「半栏子序列」奇左偶右；图间距 48px、通栏图 72px（margin-top）
+  - 行遮罩 reveal 以「逐段/逐标题」为遮罩单位、stagger 60ms（本项目标题均为单行）
+  - 详情页右栏年份位留空（brief 明示不写年份）
+QA risks: 128 图懒加载+分屏(每屏 6 张)追加；320px 无横向滚动；prefers-reduced-motion 全降级；Tab 遍历；路由前后跳转
+
+Reveal fix（本次唯一改动范围 = 入场揭示机制 fail-open；版式/型级/配色/栅格/文案/图片 URL 与顺序/路由逐字未动）:
+  - CSS 默认改为终态：.rv 不再自带 clip-path/transform（JS 未执行或报错时内容照常全显）；隐藏态改由 JS 施加的预备类
+    .rv.pre 承载（clip-path:inset(0 0 100% 0);transform:translateY(16px);transition:clip-path .9s var(--ease),transform .9s var(--ease)），
+    终态类 .rv.on（clip-path:inset(0 0 0 0);transform:none），选择器写作 .rv.pre.on,.rv.on 以压过 .rv.pre
+  - 观察器放宽：threshold 0.12 -> 0，rootMargin "0px 0px -6% 0px" -> "0px 0px -4% 0px"；stagger 仍为同批回调内 i*60ms，
+    上限 8 项，第 9 项起一律 0ms（防长列表末尾延迟累积）
+  - sweep(root)：把 root 内所有 .rv.pre:not(.on) 补 .on 并 unobserve。触发时机 = ①每次视图 mount 后 rAF（用双 rAF 落到第 2 帧，
+    让 IO 的首帧回调先跑完，否则会抢掉入场 stagger）②mount 后 900ms ③mount 后 2000ms ④window.load ⑤resize（150ms 去抖）
+    ⑥orientationchange（立即 + 150ms）⑦visibilitychange 变 visible ⑧beforeprint 与 matchMedia("print") 命中
+    ⑨cleanupView 移除旧视图前；另加 @media print 全显覆盖，保证打印/导出 PDF 无裁切痕迹
+  - bindReveals 由「.enter 之后」提前到「appendChild 之后、window.scrollTo 与 .enter 之前」执行，保证 .pre 在任何一次
+    强制样式解析（scrollTo 会 flush layout）之前落定，杜绝「先可见再被裁掉」的闪烁；带 data-plx 的节点一律不加 .pre
+    （inline transform 归视差 plxLoop 独占，两者互不覆盖）
+  - 无 IntersectionObserver 支持（或控制台将其替换为抛错/不回调的实现）时 bindReveals 直接 sweep；prefers-reduced-motion 路径行为不变（不加 .pre，直接 .on，
+    原 @media (prefers-reduced-motion:reduce) 对 .rv 的 clip-path/transform !important 覆盖保留为最后一道 CSS 级保险）
+  - 已知取舍：900ms/2000ms 的兜底 sweep 是全量补 .on，因此首屏以下条目在挂载 2 秒后即处于终态、不再保留滚动触发的行遮罩；
+    入场观感（首屏标题/tagline/案例名/首图 + 60ms stagger + 0.7s 视图转场）与修复前一致
+
+Edit-layer fix（本次唯一改动范围 = 让运行时内容不再挂靠被画布编辑层锚定的静态节点；版式/型级/配色/栅格/文案/图片 URL 与顺序/动效逐字未动）:
+  - 起因：画布可视化编辑层给全站元素注入了 data-lvt-eid 锚点，并以这些锚点对静态空容器 <main id="app"> 建立了内容快照；
+    本站内容全部由 JS 运行时填充进该容器，路由切换时 render() 的 app.innerHTML="" + appendChild(nv) 使 DOM 偏离快照 ->
+    被回滚成空壳（表现为「点击后没有内容」），同时该节点被追加了拖拽残留的内联 transform: translate(0px,-2.25226px)
+  - 自建渲染宿主 #viewHost：初始化时用 document.createElement("main") 造 host，id="viewHost"、tabIndex=-1，
+    不带任何 data-lvt-eid / data-* 编辑锚点，insertBefore 到原 #app 在 DOM 中的位置；render() 内原先所有 app.* 引用
+    （innerHTML / appendChild / focus）一律改为 host.*。CSS 侧不新增选择器、不改 main{...} 规则的任何一个值 —— 自建 <main>
+    自动继承同一条标签选择器样式（padding-top var(--bar-h) / padding-bottom 96px / min-height 100vh / outline:none）
+  - 原 #app 的处理：保留在文档中，不 remove（画布基础设施可能依赖该节点存在，移除风险高于隐藏），只做两件事 ——
+    style.transform="" 清掉拖拽残留、style.display="none" 退出布局；display:none 后它不再占用 main 的 min-height:100vh，
+    不产生多余空白屏。全站其余 data-lvt-eid（含 header/footer/#cursor 上的）原样保留，不做遍历清除
+  - MutationObserver 守卫（运行时自愈）：监听 host 与 #app 的 attributes（attributeFilter:["style","class"]），
+    一旦发现内联 transform 就清空。防死循环做法 = 回调内先做值比较（仅当 style.transform 为非空且不等于 "none" 时才写回空串），
+    写回后触发的下一条记录里该值已是空串 -> 条件不成立 -> 不再写入，自然收敛，因此不需要 disconnect/重连
+    （选值比较而非 disconnect：守卫全程在线，编辑层任意时刻注入都能被立刻抹掉，且不存在「忘记重连」的失效窗口）。
+    整段包裹 try/catch，MutationObserver 不可用或抛错时静默降级，绝不影响主流程
+  - 捕获阶段 click 委托兜底：在 document 上以 {capture:true} 注册一个 click 监听，对 e.target.closest('a[href^="#/"]')
+    命中的链接读取 getAttribute("href")，若与当前 location.hash 不同则显式 location.hash=该值 并 e.preventDefault() ——
+    即使原生跳转被编辑层吞掉，路由仍会切换；href 与当前 hash 相同时不干预，保持既有行为。该监听无条件注册
+    （与 prefers-reduced-motion 无关），且只做路由不阻止冒泡，与自定义光标模块的 mouseover 判定（a,button,[data-cursor]）不冲突
+  - hashchange 注册保持原样（window.addEventListener("hashchange",onRoute) 完好，未重复注册）；onRoute() 内
+    if(r.key===currentKey)return; 的幂等保护保留，来回跳转不会重复渲染
+
+Revamp fix（本次改动范围 = ①首页大标题与封面图源/宽度 ②详情页单列化 + 防模糊上限 + 取消详情页视差 ③关于页三列获奖表 + 栏间沟 + bio 局部行距；
+  顶/底栏、document.title 四处映射、Reveal fail-open、编辑层隔离、全部配色与型级量级、PROJECTS[i].imgs 的 URL/顺序逐字未动）:
+  - 首页大标题「李因炘」-> 「案例」（顶栏左侧品牌名仍是「李因炘」，document.title 首页仍是「李因炘 — 品牌/文创/平面」，
+    INDEX_META「品牌 / 文创 / 平面　共 3 项」与 INDEX_TAG「专注品牌视觉体系搭建与创意落地。」逐字与位置不变）
+  - 首页封面：图源换成三个 PDF 的 pages/page_1.jpg 整页渲染图（见 Asset map [Revamp 新增] 三行）；宽度 .case-cover 由 grid-column:3/13 改 3/8（5 列）；
+    【机械缺陷修复】预览实测发现 .case（<a>）原本是块容器而非栅格容器，.case-cover 上的 grid-column 一直是死规则（旧 3/13 同样未生效，封面实渲为内容区满宽）；
+    最小修复 = .case 升为 12 列栅格容器（column-gap 同 --gap）、.case-row 加 grid-column:1/-1 保持行内三件位置不变，使 3/8 真正生效；
+    封面图内的左上角编号「01/02/03」为 PDF 整页渲染图自带内容（源图如此），非 DOM 叠压，不作处理；
+    作品名/编号/类别行栅格位置（case-no 1/3、case-name 3/10、case-cat 11/13）、封面 margin-top:28px、.case padding:64px 0、.case+.case 分隔线、
+    窄屏(<860px)封面 grid-column:1/-1、hover scale(1.035) 微放大与 overflow 处理、封面 ±4% 视差全部沿用现状，只随容器变窄等比缩小
+  - 详情页：删除 .fig.r 交错、删除 layoutPass() 左右交替逻辑、删除 onRatio 里跨越 1.4 阈值切换 full 类并重排交错序的逻辑；
+    所有 .fig 一律 grid-column:3/11（8 列宽、居中留白，比首页封面宽、比整版窄），单列、按 imgs 数组顺序从上到下；图间距统一 margin-top:40px（不再区分通栏 72px / 半栏 48px）；
+    删除简介下方 #coverSlot 通栏大图位，结构变为「← 返回作品」→ metaLabel 行 → 项目名(左)+项目简介(右) → 单列图序 → 「下一个项目」；
+    窄屏堆叠顺序、.detail-title 1/8、.detail-intro 8/13、metaLabel「01 / 文创视觉系统」逐字、右栏年份留空均不变；
+    删除 .fig 上的 data-plx 与相关 plxWatch/plxForget 调用（单列连续图流做 ±4% 位移会让相邻图重叠）；视差模块本身（rAF+IO、出视口停止、REDUCED 降级）未动；
+    分屏追加机制不变（每屏 6 张、sentinel 提前 700px、state.done 后 finish() 追加「下一个项目」且不重复追加）
+  - 防模糊 capFit：img load 回调里取 img.naturalWidth 与父容器 parent.clientWidth，style.width=min(两者)px，.ph 设 margin-inline:auto 居中，
+    并把 .ph 的 aspect-ratio 同步写成 naturalWidth/naturalHeight，使容器高度恰好包住图片、不留 #EAEAEA 空隙；capSet 登记 + 独立 resize 150ms 去抖重算
+    （不与 sweep 的 resize 去抖互相打断）；CSS 侧 .ph img 加 max-width:100%，loading="lazy" decoding="async" 保持
+  - 关于页：左栏 .about-left 1/6 -> 1/5、右栏 .about-right 6/13 -> 7/13，两栏之间空出整整一列沟（col 5–6），呼吸感来自沟而非边框；
+    左栏 margin-top:calc(var(--display-fs) * -0.113) 顶对齐补偿保留，窄屏归零行为保留；
+    .about-right .display 的 margin-bottom 40px -> 56px；.about-right .body 局部覆盖 line-height 1.62 -> 1.75、max-width 46ch -> 42ch、.body p+p 1.2em -> 1.6em
+    （全局 .body 规则未改，首页与详情页正文仍 1.62/46ch）；四段 BIO 逐字不变，仍是 4 个 <p>；
+    获奖表改三列：.aw-head,.aw-row{grid-template-columns:58% 24% 18%}，赛事列左对齐、作品列左对齐、等级列 text-align:right；
+    拆分依据 = 现有 AWARDS[i][1] 中的全角空格 U+3000（沿用 indexOf("　") 逻辑拆两段），AWARDS 数组本身逐字未改，只在渲染层拆分；
+    第 10 条「三等奖」无作品名 -> 作品列留空、只有等级列有字，不编造作品名；等级词继续用 var(--fg2)，赛事名与作品名用 var(--fg)；
+    表头三列逐字「赛事」/「作品」/「奖项」；.aw-row padding 10px -> 14px、行间 1px var(--line)、最后一行不带线、.aw-head 下 1px 线保留且 padding-bottom 8px -> 10px；
+    赛事列 padding-right 16px -> 20px；字号仍 13px / line-height 1.5、三列 align-items:start；.awards-title margin-bottom 20px -> 24px；
+    窄屏(<560px)堆叠改为：赛事名一行（Label，--fg2）+ 作品名一行（13px，--fg）且等级跟在作品名同一行右侧右对齐，每组之间 20px + 1px 分隔线，不出现横向滚动
+  - 未动的：顶栏、底栏、← 返回链接位置与字号、markNav 下划线逻辑、reveal 与转场动效、document.title、任何颜色值、任何 --display-fs / H2 / Label 量级；
+    未引入任何新颜色、新装饰、新字号量级，也未新增卡片/边框/阴影/圆角/渐变/蒙版/彩色高亮/图标/插画/背景纹理
+
+Revamp2 revert（本次改动范围 = 回滚 Revamp2 的详情页数据源改动，恢复为 PDF 内嵌图序；顶/底栏、首页封面与视差、关于页、
+  reveal fail-open、编辑层隔离、防模糊机制本身、配色/型级/栅格基准、document.title 映射、全部 Pinned Content 逐字未动）:
+  - 回滚原因：Revamp2 采用的「PDF 逐页整页图」在资产侧不成立——三个 extract 目录的 pages/ 下实测仅 page_1.jpg 存在
+    （2048×1152，正是首页封面 coverPage.url 引用的那张），page_2..page_count 全部 404 NoSuchKey；
+    pages.confirmed=[1] 使每个详情页只渲染 1 张与首页封面重复的整页图，是比 Revamp2 之前明显更坏的状态
+  - 数据源：PROJECTS[i].imgsLegacy 重命名回 imgs，三个数组（五大禅林 49 / 四时茶叙 39 / 丝绸之翼 37 条）的 URL 文件名、
+    ratio 数值、数组下标与顺序逐字照搬未动；数组上方那条「旧方案…不再被引用」停用注释一并删除；
+    viewDetail() 恢复读 p.imgs 并按数组下标顺序逐张渲染，全站不存在任何依赖 pages.confirmed 的渲染代码路径
+  - pages 字段：保留在数据里（hash/count/confirmed/ratio 原值不动）但不再被任何渲染代码引用，其后注释改为说明「整页图源实测仅
+    page_1 存在、page_2 起 404，详情页不可用整页图；保留此字段供资产补齐后启用」——它是下一轮资产补齐后的接线点
+  - alt 文本：imgs 条目自带第三元素者逐字使用（如「店面文创产品货架实景」「国潮矢量插画主视觉」），无第三元素者沿用
+    「{项目名} 作品图 {序号}」的机械生成式，不新造描述性文案
+  - 运行时保险：Revamp2 的整页图 onerror 移除 .fig + console.warn、以及挂载时 confirmed.length<count 的缺页 warn 一并删除
+    （imgs 里的 URL 全部是解析器实际产出、已在站点上稳定加载过的资源，不需要探测层）；makePh 的 opts.onError 通用钩子保留但无调用方
+  - 版式回到 Revamp fix 既定值：.fig grid-column 2/12 -> 3/11（8 列宽居中单列）、margin-top 32px -> 40px；
+    窄屏(<860px) 1/-1 不变；详情页图片一律无 data-plx、无视差（Revamp fix 既定结论）
+  - 分屏回到 Revamp fix 既定值：每批 4 张 -> 6 张、sentinel rootMargin 900px -> 700px；finish() 保留 state.nextAppended 守卫，
+    「下一个项目」块不重复追加
+  - 防模糊 capApplyNow/capRegister/capSet/recapAll 与独立 150ms 去抖 resize 全部保留并照常作用于每张图：
+    渲染宽 = min(naturalWidth, 父容器 clientWidth)，.ph 等宽 + margin-inline:auto 居中，.ph img{max-width:100%}；
+    不用 object-fit / transform:scale / 固定高度 / srcset / sizes / 压缩参数；loading="lazy" decoding="async" 保持，首批 2 张 eager
+
+PDF embed fix（本次改动范围 = ①PROJECTS 新增 pdfUrl 字段（仅案例 01 赋值）②案例 01 详情页图序区替换为 PDF 原件查看器
+  ③3000ms 超时 + onload 双条件检测与 imgs 49 条自动回退 ④打印态处理；首页、关于页、顶/底栏、案例 02/03 详情页、
+  reveal fail-open、编辑层隔离四件套、防模糊机制、三个 imgs 数组内容与顺序、配色/型级/栅格基准、document.title 映射逐字未动）:
+  - 数据驱动：PROJECTS[0].pdfUrl="https://a.lovart.ai/artifacts/user/dx27WWvnZg788F7w.pdf"（逐字照抄），PROJECTS[1]/[2].pdfUrl=""；
+    viewDetail 内 if(p.pdfUrl) 走查看器路径、否则走原 imgs 分屏图序路径（原逻辑一字未改，仅把 batch/sentinel 启动收进 startImgFlow()）；
+    后续给 02/03 补 URL 只需各改一行数据，无逻辑改动。cover/coverPage/pages/imgs 四字段原样保留，pages.confirmed 不被任何渲染路径引用
+  - 查看器结构：<section class="pdfwrap grid"> 内 .pdf-note（Label 层级说明行，可参与 reveal）→ .pdfview（grid-column:2/12，
+    height:calc(100vh - var(--bar-h) - 140px)、min-height:560px、background:var(--ph)，无 border/圆角/阴影）→ .pdf-actions（外链一行）；
+    窄屏(<860px)三者 grid-column:1/-1。说明行与查看器、查看器与操作区之间均 margin-top:20px；.pdfwrap 与上方简介区间距取 40px（brief 未明，与 .fig 图间距同值，最朴素选择）
+  - 内嵌只用单层 <iframe>（不用 object 包 iframe）：object+iframe 双层在 Chromium 系会对同一 URL 发起两次请求，且 object 自带边框/
+    回退排版在部分浏览器下产生第二根滚动条，与「不做两层都渲染两遍的错版」的要求冲突；单层 iframe + 下方常设外链已覆盖「浏览器不支持内嵌」的出口
+  - 检测判定：挂载即起 3000ms setTimeout；iframe load 事件在 3000ms 内触发 -> settled=true、clearTimeout、保留查看器；
+    超时未触发 -> settled=true、移除 .pdfwrap、在 #figs 顶部插入 Label 提示「原件内嵌受限，以下为已提取的作品图（第 5、6、10–14 页未含）」（逐字，如实告知缺失页）、
+    调 startImgFlow() 走与 02/03 完全相同的分屏 6 张 / sentinel 700px / capApplyNow 防模糊路径，并 console.warn 输出失败事实与 URL。
+    已知局限：CSP 拦截时部分浏览器也触发 load，onload 判成功存在假阳性可能——brief 明示此为既定判定，不另加探测
+  - 定时器清理双保险：cleanupView(v) 调 v._pdfCleanup()（settled=true + clearTimeout），且 fail()/onload 回调各自先查 settled 与
+    frame.isConnected —— 用户已跳走时旧回调一律 return，不存在跨视图误改
+  - 打印态：@media print 下 .pdfwrap{display:none}（iframe 无法打印内容），回退图序若已渲染照常全显（既有 print 覆盖不变）；
+    .pdf-print 明文行「完整原件：https://a.lovart.ai/artifacts/user/dx27WWvnZg788F7w.pdf」屏幕态 display:none、打印态 display:block，
+    节点挂在 .pdfwrap 之外（否则随 wrap 一起被隐藏）。prefers-reduced-motion：查看器无动画，.pdf-note 的 reveal 走既有 REDUCED 直接 .on 路径，不受影响
+  - .pdfframe 上无 .rv / clip-path / 视差 / data-plx（clip-path 会裁掉浏览器原生 PDF 工具条）；新增两行说明均为既有 Label 量级（11px/500/--fg2），
+    外链为 Label 量级 --fg、hover/focus 朴素 text-decoration:underline，未新增字号量级、颜色、装饰元素
+
+Final pages fix（本次改动范围 = ①案例 01 详情页图源换成用户导出的 14 张整页图（绝对 URL）②addFig 支持数组内写绝对 URL
+  ③PROJECTS[0].pdfUrl 置空使 PDF 内嵌路径休眠（代码保留）④案例 01 图幅加宽到 10 列（wideFigs + .figs.wide）+ 窄屏特异性补条；
+  首页、关于页、顶/底栏、案例 02/03 详情页、reveal fail-open、编辑层隔离四件套、防模糊机制、配色/型级/栅格基准、document.title 映射逐字未动）:
+  - 数据源：PROJECTS[0].imgs 整体替换为用户直接提供的 14 个 https://a.lovart.ai/artifacts/user/*.jpg 绝对 URL（逐字照抄、不拼参数、不增删路径字符），
+    顺序严格 1→14；ratio 写成除法表达式（1-13 为 2048/1152≈1.7778，第 14 为 2048/1375≈1.4895，不同比例是刻意事实，不归一化不裁切）；
+    alt 一律机械生成「五大禅林 详情页作品图 {N}」（N=1..14，与数组下标严格对应）；
+    原始导出文件名（备查，不入 alt）：作品集封面-04(KQmi9RYFPS29n5rD) / -05(M2PzLuh50V740EZM) / -06(hgqeWfTqGH6m4OBn) / -07(iGaY9dOTKvDlljAz) /
+    -08(SQEksKLqv55jkxmW) / -09(8tGNVr7p2KFh9Qil) / -10(yc6OG3BEk2A2IvtY) / -11(rQM5OwA3owLFpHxO) / -12(XwSk8DWrW55cPKdZ) /
+    -13(Qs15znNRnzAVR9kI) / -14(cWWALwdVEwL6lmjw) / -15(BdoDyX0gXJJF2x7m) / -16(eXdSzfBPrD91lQKK) / -17(iGuQpsNBwtI1ZL7O)
+  - 绝对 URL 支持：addFig 内 src = /^https?:/i.test(it[0]) ? it[0] : p.base+it[0]；案例 02/03 数组条目仍是裸文件名走拼接分支，行为逐字不变；
+    BASE1 不改（仍与 imgsLegacy 语义关联）
+  - PDF 内嵌休眠：PROJECTS[0].pdfUrl 改为空串（PROJECTS[1]/[2] 本就为空），三案例统一走 startImgFlow() 分屏图序（每批 6 张，14 张分 6/6/2 三批，
+    sentinel rootMargin 700px、首批 2 张 eager 其余 lazy、state.nextAppended 守卫均不变）；
+    viewDetail 的 if(p.pdfUrl) 分支、iframe、3000ms 超时、_pdfCleanup、.pdfwrap/.pdf-print 及其 @media print 规则全部原样保留为休眠代码，未删除
+  - 图幅加宽（仅案例 01）：PROJECTS[0] 新增 wideFigs:true；viewDetail 内 p.wideFigs 为真时给 #figs 加 .wide 类；
+    新增 CSS .figs.wide .fig{grid-column:2/12}（10 列宽居中，1440 基准约 1128px 显示宽，仍小于 2048 原始宽 -> 降采样不发糊）；
+    理由：这 14 张是含「项目背景」「调研分析」正文段落的完整设计页，8 列宽下内文过小影响阅读；
+    同时在 @media (max-width:860px) 内补 .figs.wide .fig{grid-column:1/-1}——.figs.wide .fig（0,2,1）特异性高于该块原 .fig（0,1,0），
+    不补则窄屏下加宽规则压不住；图间距仍 margin-top:40px；案例 02/03 仍 .fig{grid-column:3/11}（8 列）逐字不变
+  - imgsLegacy：原 49 条逐字不动、重命名为 imgsLegacy，上方加停用注释；不再被任何渲染代码引用
+  - 防模糊机制照常作用于全部 14 张（本组 naturalWidth=2048 恒大于容器宽，实际上限不触发，但机制必须在）；无 object-fit/transform:scale/固定高度/srcset/sizes
+  - 首页案例 01 封面继续用 coverPage.url（pages/page_1.jpg）；它与本组第 1 张是同一画面（同为 2048×1152 的 01 号店面图），
+    这是用户明确要求「14 张全部按序展示」的结果，不为去重删第 1 张；cover/coverPage/pages 三字段原样保留不引用
+
+Final pages 02 fix（本次改动范围 = ①案例 02 详情页图源换成用户导出的 17 张整页图（绝对 URL）②PROJECTS[1] 新增 wideFigs:true 接入既有 10 列机制；
+  纯数据替换，未新增任何 CSS 规则、未改动任何渲染逻辑代码——addFig 的绝对 URL 判定行与 p.wideFigs 的 classList 接线行均为 Final pages fix 已建、本轮直接复用；
+  案例 01 的 14 条 imgs 与 imgsLegacy、案例 03 的 37 条 imgs、三案例 pdfUrl（均 ""）与 PDF 内嵌休眠代码、cover/coverPage/pages 字段、
+  首页、关于页、顶/底栏、reveal fail-open、编辑层隔离四件套、防模糊机制、配色/型级/栅格基准、document.title 映射逐字未动）:
+  - 数据源：PROJECTS[1].imgs 整体替换为用户直接提供的 17 个 https://a.lovart.ai/artifacts/user/*.jpg 绝对 URL（逐字照抄、不拼参数、不增删路径字符），
+    顺序严格 1→17；ratio 写成除法表达式（1-11 与 13-17 为 2048/1152≈1.7778，第 12 为 2047/1153≈1.7754）；
+    【刻意差异】第 12 张是 2047×1153 而非 2048×1152（导出时的一像素差异），原样写入，不归一化、不「顺手改正」、不裁切补齐 ——
+    与案例 01 第 14 张的 2048/1375 属同一类事实；防模糊上限按 min(naturalWidth, 容器 clientWidth) 逐张实算，此 1px 差不产生任何拉伸
+  - alt：一律机械生成「四时茶叙 详情页作品图 {N}」（N=1..17，与数组下标严格对应）；不写描述性文案，也不使用用户原始文件名
+    （「作品集封面-18…-34」是导出批次编号，放在详情页会误导读屏用户），原始文件名仅在此处如实备查：
+    作品集封面-18(d6aAPwpm9o1W7GVG) / -19(4GT5W0Pbnu9Sohkc) / -20(u5tOzcjiibL1mXZe) / -21(ukh9nuPZX7GKMaJA) / -22(K9vdeLCIz7Cud6ag) /
+    -23(s8nG9AH7Nc2nDyaH) / -24(AP6IMtZBb9JhMvGA) / -25(luFX2Kcdaa5SKyWR) / -26(LngGmEr6dnETpGxH) / -27(15abEuy28G8d1NDo) /
+    -28(RFnsTjAHsXA7cPAp) / -29(6y2MXMTQSK5CD0UE) / -30(mPzpdRV4HRGGiaHl) / -31(XvjwVMOClp73lrA7) / -32(JsKicrytSjLJoZLt) /
+    -33(8M1MS8C9Oi1POJL3) / -34(5mOOuV0v9SGqcdKH)
+  - 图幅加宽（仅案例 02）：PROJECTS[1] 新增 wideFigs:true，与案例 01 同一字段、同一机制（viewDetail 内 if(p.wideFigs)figs.classList.add("wide")）；
+    命中既有 CSS .figs.wide .fig{grid-column:2/12}（10 列宽居中，1440 基准约 1128px 显示宽 < 2047/2048 原始宽 -> 降采样不发糊）
+    与既有窄屏补条 @media (max-width:860px){.figs.wide .fig{grid-column:1/-1}}；本轮零新增 CSS 规则
+  - imgsLegacy：案例 02 原 39 条 PDF 抠图（page2_img2 … page17_img40）逐字不动、重命名为 imgsLegacy，上方加停用注释（漏页且同页多图按图元存储序），
+    不再被任何渲染代码引用；PROJECTS[0].imgsLegacy（49 条）同样原样保留
+  - 分屏：机制不变（每批 6 张、sentinel rootMargin 700px、首批 2 张 eager 其余 loading="lazy" decoding="async"、state.nextAppended 守卫），
+    17 张将分 6/6/5 三批
+  - 案例 03（丝绸之翼）本轮明确不动：37 条裸文件名 imgs 仍走 p.base+it[0] 拼接分支、无 wideFigs 字段 -> 仍 .fig{grid-column:3/11}（8 列）；
+    三案例 pdfUrl 仍均为空串，if(p.pdfUrl) 分支 / iframe / 3000ms 超时 / _pdfCleanup / .pdfwrap / .pdf-print 全部保留为休眠代码
+
+Final pages 03 fix（本次改动范围 = ①案例 03 详情页图源换成用户导出的 15 张整页图（绝对 URL）②PROJECTS[2] 新增 wideFigs:true 接入既有 10 列机制
+  ③第 354 行 .figs.wide 那条 CSS 的行尾注释文字改为反映「三案例均已接入」；
+  纯数据替换，未新增任何 CSS 规则、未改动任何渲染逻辑代码——addFig 的绝对 URL 判定行（现第 904 行）与 p.wideFigs 的 classList 接线行
+  （现第 897 行）均为 Final pages fix 已建、本轮直接复用；案例 01 的 14 条 imgs 与 imgsLegacy 49 条、案例 02 的 17 条 imgs 与 imgsLegacy 39 条、
+  三案例 pdfUrl（均 ""）与 PDF 内嵌休眠代码、cover/coverPage/pages 字段、首页、关于页、顶/底栏、reveal fail-open、编辑层隔离四件套、
+  防模糊机制、配色/型级/栅格基准、document.title 映射逐字未动）:
+  - 数据源：PROJECTS[2].imgs 整体替换为用户直接提供的 15 个 https://a.lovart.ai/artifacts/user/*.jpg 绝对 URL（逐字照抄、不拼参数、不增删路径字符），
+    顺序严格 1→15；ratio 写成除法表达式，15 条全部为 2048/1152（≈1.7778），无一异形 —— 本轮事实如此，不为「与前两案例一致」而制造差异
+  - alt：一律机械生成「丝绸之翼 详情页作品图 {N}」（N=1..15，与数组下标严格对应）；不写描述性文案，也不使用用户原始文件名
+    （「作品集封面-35…-49」是导出批次编号，放在详情页会误导读屏用户），原始文件名仅在此处如实备查：
+    作品集封面-35(S1YZtZYJDh6SkKPD) / -36(mAgH5sDjCXFOml2F) / -37(G6eQIGB0VAEjSLdW) / -38(Rj5AEIA4lMFeh9nh) / -39(YC5ZlRCW9NHTAbCh) /
+    -40(4YZzKZSAEL1Zc2oB) / -41(GYuo2wog5N9t4Nos) / -42(WcLbyboHU53vpybd) / -43(eB9ivJNjbPd40tVC) / -44(kAKBoftfoN8qrt0Q) /
+    -45(NcgJuL1VP9EQ3X3C) / -46(kwGRAb09RA5RQliI) / -47(iy3qlz5Vq1A0PGYP) / -48(uz2APyp6ST7vEZFM) / -49(kVUQI537229zB4xT)
+  - 图幅加宽（仅案例 03）：PROJECTS[2] 新增 wideFigs:true，与案例 01/02 同一字段、同一机制（viewDetail 内 if(p.wideFigs)figs.classList.add("wide")）；
+    命中既有 CSS .figs.wide .fig{grid-column:2/12}（10 列宽居中，1440 基准约 1128px 显示宽 < 2048 原始宽 -> 降采样不发糊）
+    与既有窄屏补条 @media (max-width:860px){.figs.wide .fig{grid-column:1/-1}}；本轮零新增 CSS 规则，
+    仅把第 354 行该规则的行尾注释文字从「案例 01（wideFigs）10 列宽…；02/03 不受影响」改为「三个案例均已接入 —— 10 列宽…图幅统一」，
+    选择器与声明值一字未动
+  - imgsLegacy：案例 03 原 37 条 PDF 抠图（page1_img2.png … page15_img38.jpeg）逐字不动、重命名为 imgsLegacy，上方加停用注释
+    （15 页 PDF 抠出 37 条，同页多图被拆开且存在漏页），不再被任何渲染代码引用；PROJECTS[0].imgsLegacy（49 条）与 PROJECTS[1].imgsLegacy（39 条）
+    同样原样保留 —— 全站 imgsLegacy 共 3 处定义、0 处渲染引用
+  - 分屏：机制不变（每批 6 张、sentinel rootMargin 700px、首批 2 张 eager 其余 loading="lazy" decoding="async"、state.nextAppended 守卫），
+    15 张将分 6/6/3 三批
+  - 收口：本轮结束后三案例详情页图源全部为用户导出的整页图、图幅统一 10 列；全站 artifacts URL 引用总数 = 14（案例 01）+ 17（案例 02）+ 15（案例 03）= 46 条；
+    首页三封面仍用各自 coverPage.url（三个 pages/page_1.jpg），与详情页图序无交叉引用
+
+Interaction fix（本次改动范围 = 四项纯交互增强：①详情页点击放大看原图 + 键盘导航（含 100% 像素缩放上限）②详情页 sticky 项目标识 + 进度计数
+  ③首页封面 hover 淡入项目内另一张图 ④列表行 hover + 图片 0.4s 淡入（无 blur）；
+  三案例 46 条 imgs 与三份 imgsLegacy、三案例 pdfUrl（均 ""）与 PDF 内嵌休眠代码、cover/coverPage/pages 字段、首页封面图源与 5 列宽、
+  关于页三列获奖表与 bio 节奏、顶/底栏、reveal fail-open、编辑层隔离四件套、防模糊上限、wideFigs 10 列、配色/型级/栅格基准、
+  document.title 映射、全部 data-lvt-eid 逐字未动；零新增颜色（只用 --bg/--fg/--fg2/--line/--ph）、零新增型级（.figbar 与放大层控制条均 Label 11px/500）、
+  零新增图片 URL；新增元素一律不带 data-lvt-eid）:
+  - A1 触发层：每张 .fig 内的 .ph 之上叠一个纯透明 <button type="button" class="fig-zoom">（position:absolute;inset:0;z-index:2;
+    background:none;border:0;padding:0;margin:0;cursor:pointer，.ph 本就是 position:relative），无任何可见装饰（无图标/无放大镜符号/无 hover 遮罩/无边框）；
+    :focus-visible 用 outline:1px solid var(--fg);outline-offset:-1px（全站既有焦点样式语言的内缩变体，不替换焦点环机制）；
+    aria-label 逐字 = 「放大查看：」+ 该图现有 alt（如「放大查看：丝绸之翼 详情页作品图 7」），不新造描述性文案；可 Enter/Space 激活（原生 button 行为）；
+    桌面自定义光标新增「放大」态：与既有链接态 64px 反白同机制，#cursor 内新增 .cur-word 子 span（绝对定位，不占 flex 流），
+    hover 到 [data-cursor="zoom"] 时 .cur-zoom 显 / .cur-view 隐；判定仍走既有 pointer:fine 门控（REDUCED 下光标模块整体不运行），窄屏无光标态
+  - A2 放大层：挂 document.body 直接子节点（绝不进 #viewHost / #app，避开视图切换清理与编辑层 MutationObserver 守卫），根节点固定类 .lb；
+    role="dialog" aria-modal="true" aria-label = 当前图 alt；背景 var(--bg) 实色铺满视口（非黑、非半透明毛玻璃），无遮罩质感；
+    顶部控制条高 64px（= --bar-h）、padding-inline:var(--margin)、border-bottom:1px solid var(--line)、Label 型级；
+    左侧「{编号} {案例名} · {序号} / {总数}」（如「01 五大禅林 · 07 / 14」，序号与总数两位补零），右侧文字按钮「关闭 Esc」，全程不用图标符号；
+    初始适配：图按 naturalWidth/naturalHeight 自然比例适应视口（max-width/max-height 减去控制条与 32px 安全边），不裁切/不变形/不加 object-fit/圆角/阴影/滤镜；
+    变换实现 = 容器 .lb-stage（flex:1;overflow:hidden;position:relative）内一张绝对定位 img，用 transform:translate3d + scale、transform-origin:0 0，
+    因此 scale 永不改变布局尺寸、不触发页面滚动条，也不用 object-fit；
+    滚轮缩放：wheel 时 preventDefault（{passive:false}）并以指针为锚；上限 = img.naturalWidth / fitW（恰好 100% 像素级 1:1，2048 宽图在 1440 屏上初始必为降采样），
+    下限 = fitScale（适应视口的 1x），每次 clamp 后再做锚点补偿，用户无法把图放到插值发糊；双击在 fitScale 与上限之间切换；
+    触屏：不注册任何 touch 事件、不阻止 touch 默认行为，保留浏览器原生 pinch；
+    关闭途径三种：「关闭 Esc」按钮 / Esc 键 / 点击图外的 --bg 空白区（mousedown 落点既不在 img 也不在控制条内才关，避免拖拽平移松手误关）；不加左右箭头按钮；
+    焦点管理：打开时焦点移入层内（close 按钮），Tab 被 focus trap 限制在「关闭」按钮与图之间循环（图 tabIndex=0），关闭后焦点归还触发它的那个 .fig-zoom；
+    打开期间锁滚动：html/body 各自记住原 style.overflow 与 computed overflow，关闭时逐字还原原值（不写死成空串）；
+    性能：img.src 在打开那一刻才赋值（同一 URL，缓存命中，几乎瞬时），不预加载 46 张；
+    生命周期：切案例 / 路由变化 / cleanupView / 点「下一个项目」均调 lbClose() 主动关闭并 remove() 整层；REDUCED 下层本身无任何过渡（CSS 未写 transition），缩放功能照常可用
+  - A3 键盘导航（单个 document keydown，分层判定，放大层打开时优先级更高）：
+    层开着：← → = 在当前案例 imgs 数组内翻上一张/下一张（到达首/末张停在边界不循环，避免误跳出当前项目），Esc = 关闭；
+    层关着且当前在详情页：← → = 按 PROJECTS 数组顺序切案例、首尾循环（01↔03），切后重置进度计数分母（figBarSet 重建）、分屏状态（新视图新 state）、
+    state.nextAppended 守卫（随新视图重建）、并先关闭放大层；Esc 无操作；
+    首页/关于页：← → 无操作（不劫持浏览器行为）；忽略条件：事件目标为 input/textarea/select/contenteditable，或带 Ctrl/Meta/Alt 修饰键一律不响应；
+    Tab 遍历未破坏：顶栏、三案例、返回链接、下一个项目、底栏 tel/mailto 仍可达；46 个透明按钮位于各自 .fig 的 DOM 流内（自然顺序，不抢占首屏）
+  - B sticky 项目标识：详情页在「← 返回作品」与项目标题之后、图序容器（.grid.figs）之前插入 .figbar（position:sticky;top:var(--bar-h) 即贴在 fixed 顶栏正下方、z-index:30）；
+    background:var(--bg) 实色、border-bottom:1px solid var(--line)、高 48px、padding-inline:var(--margin)、flex 两端对齐、Label 型级、font-variant-numeric:tabular-nums（数字等宽不抖行宽）；
+    左「{编号} {案例名}」用 --fg，右「{当前} / {总数}」用 --fg2；无背景模糊/阴影/圆角；
+    当前序号 = IntersectionObserver rootMargin:"-45% 0px -45% 0px"（视口中线窄带）threshold:0，以「最后一条进入窄带的 .fig」的序号为准（entries 内按 DOM 顺序取最大 index）；
+    首张在窄带之上时显示 01（初值即 1）、末张同理保持 14/17/15；分屏追加新批次后沿用 addFig 尾部挂钩把新 .fig 纳入同一 IO（不另起一套）；
+    总数 = 该案例 imgs.length 动态取（14/17/15，未写死）；序号与总数一律两位补零；放大层控制条左侧与 .figbar 共用同一渲染函数 figText()；
+    窄屏（max-width:860px / 640px）保持 sticky 与左右两列，padding-inline 跟随 --margin 自动收窄，不换行不隐藏计数；
+    @media print 下 .figbar{display:none!important}（导航辅助不进纸面）；该条不加 .rv、不参与 reveal（常驻 UI，避免任何 fail-open 风险）；
+    已知取舍：sticky 元素处于 .view（transition:transform .7s）内，入场 0.7s 期间 containing block 为 .view -> 该短暂窗口内钉在视口顶而非 64px，动画结束即恢复
+    （已于 Remove figbar 移除）
+  - C 封面第二层：三个案例封面 .ph（overflowclip）内叠第二张 img.hov（position:absolute;inset:0;opacity:0;transition:opacity .9s var(--ease)，
+    与既有 hover scale(1.035) 同时长同曲线）；hover / :focus-visible 时 opacity:1；两层都在既有 transform 链内部（.case-cover[data-plx] > .ph > img），
+    故 scale(1.035) 与 ±4% 视差照常作用于整个容器、两层同步跟随；第二层同样走 makePh 的 load 回调（校正 aspect-ratio + 走 imgFade），不加 object-fit/固定高度/srcset；
+    2048 宽 >> 5 列容器宽，实际为降采样不会糊；REDUCED 下由既有 @media (prefers-reduced-motion) 的 transition:none!important 兜住 -> 直接切换（保留 hover 反馈，只是无动画）；
+    @media (hover:none) 下 .ph .hov{display:none} 保持单层封面；首页封面仍是 5 列宽、coverPage.url 为默认显示层，封面图源/列宽/编号/案例名文案未改
+  - D1 .aw-row hover：读到现状 = .l（赛事）与 .w（作品）均为 var(--fg)、仅 .g（奖项）为 var(--fg2) -> 命中 brief 的第一种情况，采用「次要列提亮」方案：
+    hover 时把 .g 提到 var(--fg)，赛事列保持 var(--fg) 不动；过渡 color .25s ease（只写在 .g 上，避免影响其它列）；无背景/边框/阴影/图标/缩进位移；
+    窄屏（max-width:560px）堆叠态 .g 本就是 --fg，hover 提亮为同一色 -> 无视觉变化（可接受，纯增强项）
+  - D2 图片 0.4s 淡入（fail-open，全站无任何 blur/filter/缩放过渡）：CSS 默认不透明（.ph img{opacity:1}），隐藏态只能由 JS 主动加类产生：
+    img.img-fade{opacity:0} + img.img-fade.in{opacity:1;transition:opacity .4s ease}；
+    JS 在给 img 赋 src 的同一帧内判定（src 由异步设置器延迟到判定之后才写入）：缓存命中（complete && naturalWidth>0）则不加类直接显示；
+    否则加 .img-fade，load 里加 .in，error 里移除 .img-fade（破图也露出浏览器原生破图占位，不永久隐形）；
+    强制兜底：加类后启 1200ms 定时器，到点无条件移除 .img-fade —— 任何异常路径下图片都不会永久不可见；
+    绝对禁止 blur / 渐变缩放 / 位移 / 滤镜（用户硬要求「图片不能变模糊」，任何一刻有模糊帧即违约）；
+    该机制与 capApplyNow 互不干扰（只管 opacity，不碰 width/aspect-ratio）、与 reveal 的 .rv 类完全独立（两套机制各管各的）；
+    REDUCED 与 @media print 下 img.img-fade 一律 opacity:1!important（取消过渡、直接不透明）；禁用 JS 时 46 张图全部正常可见（默认态不透明）
+  - 未动的：三案例图序/图幅/分屏节奏、防模糊上限算法、reveal fail-open 全套与 sweep 触发点、编辑层隔离四件套、视差模块、PDF 休眠代码、
+    任何既有 CSS 声明值（本轮只新增了选择器与一条 opacity:1 默认态）、任何颜色/型级/栅格量级、任何 Pinned Content 文案
+
+Remove figbar fix（本次改动范围 = 纯删除，零新增代码/样式/元素/文案）:
+  - 起因：用户要求「把浏览详情页时上方的白条去掉，不要影响视觉遮挡」——上一轮 Interaction fix B 落地的 .figbar
+    （position:sticky;top:var(--bar-h)、48px 实色 --bg、border-bottom:1px solid --line、左「{编号} {案例名}」右「{序号} / {总数}」）
+    在滚动时始终压在图片顶部，用户判定为视觉遮挡。本轮把该视觉条与它专属的滚动进度追踪机制整套摘除
+  - 删除边界已核实：.figbar 与 figProgressMake 只服务于白条自己；放大层的序号走 figText() 纯函数、
+    用自己作用域内的 cur 变量初始化（var cur=seq），完全不依赖 figProgressMake 或 fb.set -> 二者可一并删除，不影响放大层任何行为
+  - 删除清单（8 处）：①CSS .figbar / .figbar .fb-id / .figbar .fb-n 三条规则 + 其上方 Interaction fix B 分节注释
+    ②@media print 内 .figbar{display:none!important} 一行（同块 .lb / img.img-fade / .pdfwrap / .pdf-print 等其余各行逐字保留）
+    ③JS 函数 figBarMake 整体（bar / idS / nS / paint / return {node,set}）
+    ④JS 函数 figProgressMake 整体（IO 创建、nodes/cur/paintAt、observe、无 IO 的 scroll+rAF 兜底 fallback/calc/kick、bind、destroy）——
+      它唯一消费者是被删的 fb.set，留着即死代码
+    ⑤JS 分节注释「Interaction fix B：sticky 项目标识 + 进度计数」四行说明
+    ⑥viewDetail 内 4 行：var fb=figBarMake(...)、v.insertBefore(fb.node,fgsNode)、var fprog=figProgressMake(fb.set)、v._figProgress=fprog；
+      紧随其后的 var fgsNode=v.querySelector("#figs") 保留（下方 var figs=fgsNode 与 wideFigs 的 classList.add("wide") 仍消费它），
+      其上的 var imgList=p.imgs||[] 保留（addFig / batch / lbOpen 路径仍消费）
+    ⑦addFig 内 fprog.observe(fig) 一行 + batch 内 fprog.bind() 一行 —— fprog 已不存在，留着会抛 ReferenceError 打断整个详情页渲染（本轮头号风险点）
+    ⑧cleanupView 内 if(v._figProgress)v._figProgress.destroy(); 一行（同函数 lbClose() / _pdfCleanup / sweep(v) / plxForget 等其余各行逐字保留）
+  - 保留项：figText 与 pad2（放大层控制条序号文案的唯一来源，格式 {编号} {案例名} · {序号} / {总数}，例「01 五大禅林 · 07 / 14」）；
+    放大层（A 项）全部代码与样式（.fig-zoom / .lb / .lb-stage / .lb-img / .lb-cap / .lb-close、fit/maxS/zoomAt/show/clampPan/apply/lbClose、
+    缩放上限 maxS=naturalWidth/(iw*fitS) 严格卡 100% 原始像素、双击切换、拖拽平移、触屏原生 pinch、focus trap、三种关闭、overflow 逐字还原、
+    键盘分层、#cursor 的「放大」态）；封面第二层 crossfade（C 项）；.aw-row 奖项列 hover（D1）与 imgFade 图片淡入（D2，1200ms 兜底 + fail-open）；
+    capApplyNow 防模糊上限；reveal/sweep fail-open 全套；编辑层隔离四件套；wideFigs 与 .figs.wide 全部 CSS；
+    三案例 imgs 46 条与三份 imgsLegacy、三 pdfUrl:"" 与 PDF 内嵌休眠代码、首页与关于页全部内容、顶/底栏、document.title 映射、所有既有 data-lvt-eid
+  - 未引入任何形式的替代计数：无顶部细线、无角落浮字、无进度条、无滚动百分比、无页码浮层；顶栏仍 fixed 无背景（母版既定设计，未加背景/毛玻璃/backdrop-filter/渐变遮罩）
+  - 版式结果：详情页 DOM = 「← 返回作品」→ metaLabel 行 → 项目标题(左)+项目简介(右，含色板) → 图序容器 #figs → …… → 「下一个项目」；
+    简介与第一张图之间的垂直间隙回到全站标准 40px（= .fig 的 margin-top），未为补回白条让出的 48px 新增任何 margin/padding/占位元素；
+    滚动时图片可从 64px fixed 顶栏下方穿过（顶栏无背景，属既定设计，不作「修复」）
+  - 零新增颜色、零新增型级、零新增动效、零新增图片 URL、零新增 data-lvt-eid；全站 a.lovart.ai/artifacts/user/*.jpg 数组内引用仍为 46 条
+
+Display clip fix（本次唯一改动范围 = .display 的 padding/margin 成对补偿 + 本段注释；其余全部逐字未动）:
+  - 起因：用户要求「把网站中“案例”和“关于”这几个字显示完整，底部不能被遮挡」
+  - 实测根因（渲染截图取证，非代码推断）：①给 .display 临时加背景色块可视化其边框盒，首页「案例」字形底部横笔恰在色块（=边框盒）
+    底边处被水平切断，色块上下边之外无字形；②再临时对 .rv.pre.on,.rv.on 加 clip-path:none!important 后同一位置字形底部完整伸出
+    色块底边之下 -> 裁切确由 reveal 终态 clip-path:inset(0 0 0 0) 按边框盒裁切所致（clip-path 的 inset 参照 border-box），
+    而非祖先 overflow（两标题祖先链 .grid/.index-head / .about-grid/.about-right/.view/main 均无 overflow 容器）；
+    机理 = .display{line-height:.92} 使 CJK 字形（em 盒≈1.0em 且字面近满）上下各溢出边框盒约 (1-0.92)/2=0.04em（168px 字号≈6.7px），
+    终态裁切把下溢部分切掉。两处临时测量规则测毕已逐字回滚（grep TEMP/QA-MEASURE 零命中）
+  - 修复 = .display 规则之后紧邻新增一条 .display{padding-block:.12em;margin-block:-.12em}：padding 计入边框盒 -> 裁切区上下各扩 0.12em
+    （≈0.04em 溢出的 3 倍余量，不取卡边值）；等值负 margin 抵掉 -> 元素视觉位置与所占布局高度逐像素不变（成对出现，绝对值严格相等）
+  - 【级联补条】实测发现两处实例级 margin 会压掉基配对规则的对应侧：.index-title{margin-top:32px}（同特异性、源码在后）压顶侧、
+    .about-right .display{margin-bottom:56px}（0,2,0 更高特异性）压底侧 -> 若只加基规则，这两处实例的 margin 净增 +0.12em、版式位移，
+    违反零位移约束；故各补一条实例级规则把既定值与 -.12em 合并重述：.index-title.display{margin-top:calc(32px - .12em)}（同特异性、源码在后取胜）
+    与 .about-right .display{margin-bottom:calc(56px - .12em)}（同特异性、源码在后取胜）；两条既有行（32px / 56px）逐字未改，
+    语义上 32px 与 56px 的既定间距仍逐像素保留（calc 展开 = 32px + (-0.12em) 与基规则 padding 的 +0.12em 相抵）；
+    关于页「关于」的顶侧与首页「案例」的底侧无实例级 margin 覆盖，由基配对规则直接生效
+  - line-height:.92 / letter-spacing:-.03em / font-weight:500 / font-size:var(--display-fs) 四项逐字未改（原声明行一字未动，补偿为独立新规则）；
+    reveal 的 .rv / .rv.pre / .rv.pre.on,.rv.on 三条 clip-path 值与 rootMargin 逐字未改；.h2 / .body / .label 未动（行高≥1.08 无此问题）
+  - .about-left{margin-top:calc(var(--display-fs) * -0.113)} 逐字未动：负 margin 抵掉 padding 后 .about-right 内标题的实际顶边位置不变，
+    故左栏第一行顶与「关于」字形顶的同轴关系不变（改前改后关于页同视口截图逐像素比对确认，见交付报告）
+  - 全站 .display 实例仅两处：首页 <h1 class="display index-title rv">案例</h1> 与关于页 <h1 class="display rv">关于</h1>（详情页项目名用 .h2）；
+    两处同机制受益，字形底部完整可见
+  - 打印态与 reduced-motion 态：两态下 .rv 的 clip-path 被既有 !important 覆盖为 none，裁切本不存在；padding/margin 补偿在两态下同样生效且
+    不改变版式（等值成对），标题字形完整可读
+  - 零新增颜色、零新增型级、零新增动效、零新增图片 URL、零新增元素、零新增 data-lvt-eid
+-->
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>李因炘 — 品牌/文创/平面</title>
+<style>
+:root{
+  --bg:#F4F4F4; --fg:#111111; --fg2:#8A8A8A; --line:#DCDCDC; --ph:#EAEAEA;
+  --margin:48px; --gap:24px; --bar-h:64px;
+  --ease:cubic-bezier(0.16,1,0.3,1);
+  --font:"Helvetica Neue","Neue Haas Grotesk Display Pro","PingFang SC","Noto Sans SC","Microsoft YaHei",Arial,sans-serif;
+  --display-fs:clamp(72px,12vw,168px);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{-webkit-text-size-adjust:100%}
+body{background:var(--bg);color:var(--fg);font-family:var(--font);font-size:16px;line-height:1.62;letter-spacing:0;hanging-punctuation:first}
+img{border:0}
+a{color:inherit;text-decoration:none}
+button{font:inherit;background:none;border:0;color:inherit}
+:focus-visible{outline:2px solid var(--fg);outline-offset:3px}
+::selection{background:var(--fg);color:var(--bg)}
+
+/* ── 栅格 ───────────────────────────── */
+.grid{display:grid;grid-template-columns:repeat(12,1fr);column-gap:var(--gap);padding-inline:var(--margin)}
+
+/* ── 顶栏 ───────────────────────────── */
+.topbar{position:fixed;top:0;left:0;right:0;height:var(--bar-h);z-index:40;
+  display:flex;align-items:center;justify-content:space-between;padding-inline:var(--margin);
+  mix-blend-mode:normal;background:transparent}
+.brand{font-size:13px;font-weight:500;color:var(--fg)}
+.topnav{display:flex;align-items:center;gap:28px;font-size:12px;color:var(--fg2)}
+.topnav .tag{color:var(--fg2)}
+.navlink{position:relative;color:var(--fg2);display:inline-block}
+.navlink::after{content:"";position:absolute;left:0;right:0;bottom:-4px;height:1px;background:var(--fg);transform:scaleX(0);transform-origin:left;transition:transform .3s var(--ease)}
+.navlink[aria-current="page"]::after{transform:scaleX(1)}
+/* 导航双层翻滚 */
+.roll{display:inline-flex;flex-direction:column;overflow:hidden;height:1.5em;vertical-align:top}
+.roll span{display:block;height:1.5em;line-height:1.5em;transition:transform .42s var(--ease)}
+.navlink:hover .roll span,.navlink:focus-visible .roll span{transform:translateY(-1.5em)}
+
+/* ── 主区 / 视图转场 ─────────────────── */
+main{display:block;padding-top:var(--bar-h);padding-bottom:96px;min-height:100vh;outline:none}
+.view{transition:opacity .7s var(--ease),transform .7s var(--ease)}
+.view.enter{opacity:0;transform:translateY(24px)}
+.view.leave{opacity:0;transition:opacity .28s linear}
+
+/* ── 文字行遮罩 reveal（fail-open：CSS 默认即终态可见，隐藏态由 JS 的 .pre 施加） ── */
+.rv{clip-path:none;transform:none;opacity:1}
+.rv.pre{clip-path:inset(0 0 100% 0);transform:translateY(16px);transition:clip-path .9s var(--ease),transform .9s var(--ease)}
+.rv.pre.on,.rv.on{clip-path:inset(0 0 0 0);transform:none}
+
+/* ── 型级 ───────────────────────────── */
+.display{font-size:var(--display-fs);font-weight:500;line-height:.92;letter-spacing:-.03em}
+.display{padding-block:.12em;margin-block:-.12em} /* Display clip fix：内补 padding 撑大边框盒（clip-path 裁切区随之变大）+ 等值负 margin 抵掉（版式零位移）；成对出现，绝对值严格相等 */
+h2.h2,.h2{font-size:clamp(28px,3.2vw,44px);font-weight:500;line-height:1.08;letter-spacing:-.02em}
+.body{font-size:16px;line-height:1.62;max-width:46ch}
+.body p+p{margin-top:1.2em}
+.label{font-size:11px;font-weight:500;color:var(--fg2);letter-spacing:0}
+.label.lat{letter-spacing:.14em}
+
+/* ── 返回链接 ───────────────────────── */
+.back{position:absolute;top:24px;right:var(--margin);font-size:12px;color:var(--fg2);z-index:5}
+.back:hover{color:var(--fg)}
+
+/* ── 视图 1 首页 ────────────────────── */
+.index-head{padding-top:40px}
+.index-head .row{display:flex;justify-content:space-between;align-items:baseline}
+.index-title{grid-column:1/9;margin-top:32px}
+.index-title.display{margin-top:calc(32px - .12em)} /* Display clip fix：.index-title 的 margin-top:32px（同特异性、源码在后）会压掉基配对规则的 margin-block 顶侧 -> 在此把既定 32px 与 -.12em 合并重述，使成对抵消逐像素成立；既有行逐字未改 */
+.index-tag{grid-column:9/13;align-self:end;font-size:16px;line-height:1.62;color:var(--fg);max-width:46ch}
+.cases{margin-top:72px}
+.case{display:grid;grid-template-columns:repeat(12,1fr);column-gap:var(--gap);padding:64px 0} /* Revamp：.case 升为 12 列栅格容器，使 .case-cover 的 grid-column:3/8 真正生效（旧版 .case 为块容器，3/13 一直是死规则、封面实渲为内容区满宽） */
+.case+.case{border-top:1px solid var(--line)}
+.case-row{display:grid;grid-template-columns:repeat(12,1fr);column-gap:var(--gap);grid-column:1/-1}
+.case-no{grid-column:1/3;padding-top:.55em}
+.case-name{grid-column:3/10;position:relative;display:inline-block;align-self:start}
+.case-name::after{content:"";position:absolute;left:0;right:0;bottom:-6px;height:1px;background:var(--fg);transform:scaleX(0);transform-origin:left;transition:transform .5s var(--ease)}
+.case-link:hover .case-name::after,.case-link:focus-visible .case-name::after{transform:scaleX(1)}
+.case-cat{grid-column:11/13;padding-top:.75em;text-align:left}
+.case-cover{display:block;grid-column:3/8;margin-top:28px} /* Revamp: 3/13 -> 3/8（封面宽约缩一半） */
+.ph{background:var(--ph);width:100%;position:relative}
+.ph.overflowclip{overflow:hidden}
+.ph img{display:block;width:100%;max-width:100%;height:auto;border:0;will-change:transform;opacity:1} /* Interaction fix D2：默认态必须不透明（fail-open），隐藏态只由 JS 加 .img-fade 产生 */
+/* Interaction fix D2：图片 0.4s 淡入（无 blur / 无缩放 / 无位移 / 无滤镜，只动 opacity） */
+img.img-fade{opacity:0}
+img.img-fade.in{opacity:1;transition:opacity .4s ease}
+.case-cover .ph img{transition:transform .9s var(--ease);transform-origin:center}
+.case-link:hover .case-cover .ph img,.case-link:focus-visible .case-cover .ph img{transform:scale(1.035)}
+/* Interaction fix C：首页封面 hover 淡入第二层——绝对定位覆盖于底层封面图之上，两层同处 .ph（overflowclip）内且同处 transform 链内部，
+   因此上面那条 scale(1.035)（选择器 .case-cover .ph img 同时命中两层）与祖先 .case-cover[data-plx] 的 ±4% 视差对两层同步生效。
+   选择器必须写 .case-cover .ph img.hov（0,3,1）且置于此：既压住同特异性的 .case-cover .ph img{transition:transform …}（否则 opacity 过渡被抢掉），
+   也压住 img.img-fade.in；第二层只由 hover / :focus-visible 控制可见，无 blur / 无滤镜 / 无位移 / 无缩放过渡 */
+.case-cover .ph img.hov{position:absolute;left:0;top:0;width:100%;height:auto;opacity:0;transition:opacity .9s var(--ease)}
+.case-link:hover .case-cover .ph img.hov,.case-link:focus-visible .case-cover .ph img.hov{opacity:1}
+
+/* ── 视图 2 关于 ────────────────────── */
+.about-wrap{position:relative;padding-top:88px}
+.about-grid{display:grid;grid-template-columns:repeat(12,1fr);column-gap:var(--gap);padding-inline:var(--margin);align-items:start}
+.about-left{grid-column:1/5;margin-top:calc(var(--display-fs) * -0.113)} /* 视觉补偿：Display 行盒负 half-leading 使字形顶高于行盒顶，令左栏与「关于」字形顶同水平线（brief 关键特征） */
+.about-right{grid-column:7/13} /* Revamp: 左 1/5 + 右 7/13，两栏之间空出整整一列沟（col 5–6），呼吸感来自沟而非边框 */
+.about-right .display{margin-bottom:56px} /* Revamp: 40px -> 56px */
+.about-right .display{margin-bottom:calc(56px - .12em)} /* Display clip fix：上行的 margin-bottom:56px（0,2,0）会压掉基配对规则的底侧 -> 本行同特异性、源码在后取胜，把既定 56px 与 -.12em 合并重述；既有行逐字未改 */
+/* Revamp：仅关于页右栏的局部正文节奏（全局 .body 仍为 1.62 / 46ch） */
+.about-right .body{line-height:1.75;max-width:42ch}
+.about-right .body p+p{margin-top:1.6em}
+/* Revamp：获奖表三列——赛事 58% 左 / 作品 24% 左 / 奖项 18% 右对齐 */
+.aw-head,.aw-row{display:grid;grid-template-columns:58% 24% 18%;align-items:start}
+.aw-head{padding-bottom:10px;border-bottom:1px solid var(--line)}
+.aw-head .g{text-align:right}
+.aw-row{padding:14px 0;border-bottom:1px solid var(--line)}
+.aw-row:last-child{border-bottom:0}
+.aw-row .l{font-size:13px;line-height:1.5;color:var(--fg);padding-right:20px}
+.aw-row .w{font-size:13px;line-height:1.5;color:var(--fg);padding-right:12px}
+.aw-row .g{font-size:13px;line-height:1.5;color:var(--fg2);text-align:right;transition:color .25s ease}
+/* Interaction fix D1：读到现状 = .l（赛事）与 .w（作品）均为 var(--fg)、仅 .g（奖项）为 var(--fg2) -> 采用「次要列提亮」方案：
+   hover 时把 .g 提到 var(--fg)，赛事列保持不动；纯色彩对比，不加背景/hairline/阴影/图标/位移 */
+.aw-row:hover .g{color:var(--fg)}
+.muted{color:var(--fg2)}
+.awards-title{margin-bottom:24px}
+
+/* ── 视图 3 详情 ────────────────────── */
+.detail-wrap{position:relative;padding-top:88px}
+.detail-meta{display:flex;justify-content:space-between}
+.detail-title{grid-column:1/8;margin-top:28px}
+.detail-intro{grid-column:8/13;margin-top:28px}
+.detail-intro .label{display:block;margin-bottom:14px}
+.figs{margin-top:8px}
+/* Revamp：详情页单列图序——一律居中、按原序、间距统一（删除 .fig.r 交错与 .fig.full 通栏） */
+/* Revamp2 revert：回到 Revamp fix 既定值——8 列宽居中单列（3/11）、图间距 40px */
+.fig{grid-column:3/11;margin-top:40px}
+.figs.wide .fig{grid-column:2/12} /* Final pages 03 fix：三个案例（wideFigs）均已接入 —— 10 列宽、居中、两侧各留 1 列，图幅统一 */
+/* ── PDF embed fix：PDF 原件查看器（视为「图片本体」级嵌入内容，无 border/圆角/阴影/装饰） ── */
+.pdfwrap{margin-top:40px}
+.pdf-note{grid-column:2/12}
+.pdfview{grid-column:2/12;margin-top:20px;height:calc(100vh - var(--bar-h) - 140px);min-height:560px;
+  background:var(--ph);overflow:hidden}
+.pdfframe{width:100%;height:100%;border:0;display:block} /* 禁加 .rv / clip-path / 视差：clip-path 会裁掉浏览器原生 PDF 工具条 */
+.pdf-actions{grid-column:2/12;margin-top:20px}
+.pdf-open{font-size:11px;font-weight:500;letter-spacing:0;color:var(--fg)}
+.pdf-open:hover,.pdf-open:focus-visible{text-decoration:underline} /* 朴素实现，不新增装饰元素 */
+.pdf-fallback-note{grid-column:1/-1;margin-top:8px}
+.pdf-print{display:none;padding-inline:var(--margin)} /* 仅打印态可见的明文 URL 行；挂在 .pdfwrap 之外，不随查看器一起被 print 隐藏 */
+/* ── Interaction fix A1：详情页图片放大触发层——纯透明按钮，无任何可见装饰 ── */
+.fig-zoom{position:absolute;inset:0;z-index:2;background:none;border:0;padding:0;margin:0;cursor:pointer;
+  -webkit-tap-highlight-color:transparent}
+.fig-zoom:focus-visible{outline:1px solid var(--fg);outline-offset:-1px} /* 全站既有焦点样式语言的内缩变体 */
+/* ── Interaction fix A2：放大层（挂 document.body 直接子节点；--bg 实色满屏，非黑色非毛玻璃） ── */
+.lb{position:fixed;inset:0;z-index:80;background:var(--bg);display:flex;flex-direction:column}
+.lb-bar{flex:none;height:var(--bar-h);display:flex;align-items:center;justify-content:space-between;gap:24px;
+  padding-inline:var(--margin);border-bottom:1px solid var(--line)}
+.lb-cap{font-size:11px;font-weight:500;letter-spacing:0;color:var(--fg2);font-variant-numeric:tabular-nums}
+.lb-close{font-size:11px;font-weight:500;letter-spacing:0;color:var(--fg);flex:none;cursor:pointer}
+.lb-close:hover,.lb-close:focus-visible{text-decoration:underline} /* 与 .pdf-open 同款朴素反馈，不用图标符号 */
+.lb-stage{flex:1;position:relative;overflow:hidden;min-height:0} /* 图用 transform 缩放平移，容器裁切 -> scale 永不触发页面滚动条 */
+.lb-img{position:absolute;left:0;top:0;transform-origin:0 0;max-width:none;will-change:transform;outline:none}
+.lb-img:focus-visible{outline:1px solid var(--fg);outline-offset:-1px}
+.next{display:grid;grid-template-columns:repeat(12,1fr);column-gap:var(--gap);padding-inline:var(--margin);
+  border-top:1px solid var(--line);margin-top:96px;padding-top:40px;padding-bottom:8px;align-items:baseline}
+.next .label{grid-column:1/4}
+.next .h2{grid-column:4/13;position:relative;display:inline-block}
+.next .h2::after{content:"";position:absolute;left:0;right:0;bottom:-6px;height:1px;background:var(--fg);transform:scaleX(0);transform-origin:left;transition:transform .5s var(--ease)}
+.next:hover .h2::after,.next:focus-visible .h2::after{transform:scaleX(1)}
+
+/* ── 色板（仅简介标准色条目） ────────── */
+.swatches{display:flex;flex-wrap:wrap;gap:10px 20px;margin-top:12px}
+.sw{display:inline-flex;align-items:center;gap:8px;font-size:13px;line-height:1.4;color:var(--fg)}
+.sw i{width:12px;height:12px;display:inline-block;flex:none}
+
+/* ── 底栏 ───────────────────────────── */
+.footer{min-height:var(--bar-h);display:flex;align-items:center;justify-content:space-between;
+  padding-inline:var(--margin);font-size:12px;color:var(--fg2);line-height:1.6;gap:24px}
+.footer .fr{text-align:right}
+.footer a:hover{color:var(--fg)}
+
+/* ── 自定义光标 ─────────────────────── */
+#cursor{display:none}
+@media (pointer:fine){
+  body,a,button,.fig-zoom{cursor:none} /* .fig-zoom 自带 cursor:pointer（0,1,0）会压住标签选择器，此处同级补上以保持自定义光标一致 */
+  #cursor{display:flex;align-items:center;justify-content:center;position:fixed;left:0;top:0;z-index:90;
+    width:8px;height:8px;border-radius:50%;background:var(--fg);pointer-events:none;
+    transition:width .28s var(--ease),height .28s var(--ease),background-color .28s linear;will-change:transform}
+  #cursor span{font-size:11px;line-height:1;color:#000;opacity:0;transition:opacity .2s linear;white-space:nowrap}
+  #cursor.big{width:64px;height:64px;background:#FFFFFF;mix-blend-mode:difference}
+  #cursor .cur-word{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%)} /* Interaction fix A1：「放大」态文字绝对定位，不占 flex 流，与既有「查看」互斥显示 */
+  #cursor.big span{opacity:1}
+}
+
+/* ── 响应式 ─────────────────────────── */
+@media (max-width:1024px){:root{--margin:32px}}
+@media (max-width:860px){
+  .index-title{grid-column:1/-1}
+  .index-tag{grid-column:1/-1;margin-top:20px}
+  .case-no{grid-column:1/3}
+  .case-name{grid-column:3/13}
+  .case-cat{grid-column:3/13;padding-top:10px}
+  .case-cover{grid-column:1/-1}
+  .about-grid{display:flex;flex-direction:column}
+  .about-right{order:1;margin-bottom:64px}
+  .about-left{order:2;margin-top:0}
+  .detail-title,.detail-intro{grid-column:1/-1}
+  .detail-intro{margin-top:32px}
+  .fig{grid-column:1/-1}
+  .figs.wide .fig{grid-column:1/-1} /* Final pages fix 特异性补条：.figs.wide .fig（0,2,1）高于本块原有 .fig（0,1,0），不补则窄屏被加宽规则压住 */
+  .pdf-note,.pdfview,.pdf-actions{grid-column:1/-1} /* PDF embed fix：窄屏满列 */
+  .next .label{grid-column:1/-1;margin-bottom:12px}
+  .next .h2{grid-column:1/-1}
+}
+@media (max-width:640px){:root{--margin:20px}}
+@media (hover:none){
+  .case-cover .ph img.hov{display:none} /* Interaction fix C：触屏不淡入，保持单层封面，避免点进去才发现画面不同造成困惑 */
+}
+@media (max-width:560px){
+  .aw-head{display:none}
+  /* Revamp：堆叠式 = 赛事名一行（Label，--fg2）+ 作品名与等级同一行（等级右对齐），组间 20px + 1px 分隔线，无横向滚动 */
+  .aw-row{display:flex;flex-wrap:wrap;align-items:baseline;padding:0 0 20px;margin-bottom:20px;border-bottom:1px solid var(--line)}
+  .aw-row:last-child{border-bottom:0;margin-bottom:0}
+  .aw-row .l{flex:1 0 100%;font-size:11px;font-weight:500;color:var(--fg2);padding-right:0;margin-bottom:6px}
+  .aw-row .w{flex:1 1 auto;font-size:13px;color:var(--fg);padding-right:12px;text-align:left}
+  .aw-row .g{flex:0 0 auto;font-size:13px;color:var(--fg);text-align:right} /* 堆叠式按既定行为：作品与奖项同行 13px #111111 */
+  .footer{flex-direction:column;align-items:flex-start;justify-content:center;gap:12px;padding-block:16px}
+  .footer .fr{text-align:left}
+}
+
+/* ── 减弱动态效果：全降级 ────────────── */
+@media (prefers-reduced-motion:reduce){
+  *,*::before,*::after{transition:none!important;animation:none!important}
+  .rv{clip-path:none!important;transform:none!important}
+  .view,.view.enter,.view.leave{opacity:1!important;transform:none!important}
+  #cursor{display:none!important}
+  body,a,button{cursor:auto}
+  .ph img{transform:none!important}
+  img.img-fade,img.img-fade.in{opacity:1!important} /* Interaction fix D2：reduced-motion 下取消淡入、直接不透明（放大与缩放上限照常可用） */
+}
+
+/* ── 打印 / 导出 PDF：reveal 强制终态，不留裁切痕迹 ── */
+@media print{
+  .rv,.rv.pre,.rv.on{clip-path:none!important;transform:none!important;transition:none!important}
+  /* PDF embed fix：iframe 无法打印内容 -> 查看器整块隐藏，改为输出明文原件 URL；回退图序（若已渲染）照常全显 */
+  .pdfwrap{display:none!important}
+  .pdf-print{display:block;font-size:11px;font-weight:500;color:#111111;margin-top:20px;word-break:break-all}
+  .lb{display:none!important} /* Interaction fix A：放大层不参与打印 */
+  img.img-fade,img.img-fade.in{opacity:1!important}
+}
+</style>
+</head>
+<body>
+<header class="topbar" data-lvt-eid="ec4dae4f3e">
+  <a class="brand" href="#/" data-lvt-eid="6f80db327c">李因炘</a>
+  <nav class="topnav" aria-label="主导航" data-lvt-eid="72ab22542f">
+    <a class="navlink" href="#/" data-route="index" data-lvt-eid="e0235ca015"><span class="roll" data-lvt-eid="546b38913b"><span data-lvt-eid="9a85ae0e71">作品</span><span aria-hidden="true" data-lvt-eid="2e99d617c1">作品</span></span></a>
+    <a class="navlink" href="#/about" data-route="about" data-lvt-eid="91f7f525ad"><span class="roll" data-lvt-eid="f647965c59"><span data-lvt-eid="ad173347ad">关于</span><span aria-hidden="true" data-lvt-eid="f005b2ac51">关于</span></span></a>
+    <span class="tag" data-lvt-eid="37ea904ada">品牌/文创/平面</span>
+  </nav>
+</header>
+
+<main id="app" tabindex="-1" data-lvt-eid="a7644776dc" style="transform: translate(0px, -2.25226px);"></main>
+
+<footer class="footer" data-lvt-eid="d326617c4e">
+  <div class="fl" data-lvt-eid="c022f3d086">品牌 / 文创 / 平面设计</div>
+  <div class="fr" data-lvt-eid="d9292418f9">
+    <div data-lvt-eid="89e4a33406"><a href="tel:19560616642" data-lvt-eid="855137cfa3">电话　19560616642</a></div>
+    <div data-lvt-eid="2312acc787">微信　Tloml-jiayi1011</div>
+    <div data-lvt-eid="931686f440"><a href="mailto:3334989070@qq.com" data-lvt-eid="136890e15b">邮箱　3334989070@qq.com</a></div>
+  </div>
+</footer>
+
+<div id="cursor" aria-hidden="true" data-lvt-eid="535a386e5d"><span data-lvt-eid="d024e0c824">查看</span><span class="cur-word cur-zoom">放大</span></div>
+
+<script>
+"use strict";
+/* ══ 数据 ══════════════════════════════════════════════ */
+var BASE1="https://assets-persist.lovart.ai/pdf_extracts/975c49d81a26de11/images/";
+var BASE2="https://assets-persist.lovart.ai/pdf_extracts/8cbe68c459f38b4a/images/";
+var BASE3="https://assets-persist.lovart.ai/pdf_extracts/036a3fd987a7da61/images/";
+
+var PROJECTS=[
+{slug:"wudao-chalin",name:"五大禅林",category:"文创视觉系统",metaLabel:"01 / 文创视觉系统",base:BASE1,
+ pdfUrl:"", /* PDF 内嵌路径已因用户提供整页图而休眠，代码保留；三案例统一走下方 imgs 分屏图序 */
+ wideFigs:true, /* Final pages fix：案例 01 图幅 10 列（.figs.wide .fig{grid-column:2/12}）；02/03 不设该字段，仍 8 列 */
+ cover:{file:"page1_img1.jpeg",ratio:1.78,alt:"五大禅林 封面：暖光虚焦的文创货架实景，画面中央叠白色「五大禅林」标志与编号 01"}, /* Revamp 后不再被引用（首页封面改用 coverPage） */
+ coverPage:{url:"https://assets-persist.lovart.ai/pdf_extracts/975c49d81a26de11/pages/page_1.jpg",ratio:1.414,alt:"五大禅林 案例 PDF 首页整页渲染图"},
+ pages:{hash:"975c49d81a26de11",count:14,confirmed:[1],ratio:2048/1152}, /* 整页图源：实测仅 page_1 存在（2048×1152），page_2 起 404，故详情页不可用整页图；保留此字段供资产补齐后启用 */
+ intro:[
+  {t:"本项目立足千山核心文化符号“五大禅林”——祖越寺、中会寺、香岩寺、大安寺、龙泉寺的历史文化资源，针对景区现有文创产品文化叙事单一、符号辨识度不足的问题展开。"},
+  {t:"设计确立“禅意符号现代化转译”策略，通过实地调研提取寺庙建筑、特色植物与传统纹样，以中式排版与几何重构结合的方式建立“五大禅林”品牌标志，并绘制五幅风格统一的国潮矢量插画。"},
+  {lead:"标准色板：",sw:[["南瓜橙","#DE4F12"],["酒红","#9E1E3D"],["香芋紫","#814295"],["玫瑰红","#CD3963"],["深海蓝","#17489D"]]},
+  {t:"视觉系统延展至帆布袋、折扇、团扇、眼罩、T恤、抱枕、笔记本、书签、手机壳与马克杯等产品，并通过店面亮化与户外灯箱的实景合成呈现落地效果。"}],
+ imgs:[
+  /* Final pages：案例 01 详情页图源 = 用户导出的 14 张整页图（绝对 URL 逐字照抄，见顶部 Asset map [Final pages]）；
+     原始导出文件名依次 = 作品集封面-04 … -17（导出批次编号，仅备查，不入 alt）；
+     第 14 张 2048×1375 与其余 13 张 2048×1152 比例不同，是刻意事实，不归一化、不裁切补齐 */
+  ["https://a.lovart.ai/artifacts/user/KQmi9RYFPS29n5rD.jpg",2048/1152,"五大禅林 详情页作品图 1"],
+  ["https://a.lovart.ai/artifacts/user/M2PzLuh50V740EZM.jpg",2048/1152,"五大禅林 详情页作品图 2"],
+  ["https://a.lovart.ai/artifacts/user/hgqeWfTqGH6m4OBn.jpg",2048/1152,"五大禅林 详情页作品图 3"],
+  ["https://a.lovart.ai/artifacts/user/iGaY9dOTKvDlljAz.jpg",2048/1152,"五大禅林 详情页作品图 4"],
+  ["https://a.lovart.ai/artifacts/user/SQEksKLqv55jkxmW.jpg",2048/1152,"五大禅林 详情页作品图 5"],
+  ["https://a.lovart.ai/artifacts/user/8tGNVr7p2KFh9Qil.jpg",2048/1152,"五大禅林 详情页作品图 6"],
+  ["https://a.lovart.ai/artifacts/user/yc6OG3BEk2A2IvtY.jpg",2048/1152,"五大禅林 详情页作品图 7"],
+  ["https://a.lovart.ai/artifacts/user/rQM5OwA3owLFpHxO.jpg",2048/1152,"五大禅林 详情页作品图 8"],
+  ["https://a.lovart.ai/artifacts/user/XwSk8DWrW55cPKdZ.jpg",2048/1152,"五大禅林 详情页作品图 9"],
+  ["https://a.lovart.ai/artifacts/user/Qs15znNRnzAVR9kI.jpg",2048/1152,"五大禅林 详情页作品图 10"],
+  ["https://a.lovart.ai/artifacts/user/cWWALwdVEwL6lmjw.jpg",2048/1152,"五大禅林 详情页作品图 11"],
+  ["https://a.lovart.ai/artifacts/user/BdoDyX0gXJJF2x7m.jpg",2048/1152,"五大禅林 详情页作品图 12"],
+  ["https://a.lovart.ai/artifacts/user/eXdSzfBPrD91lQKK.jpg",2048/1152,"五大禅林 详情页作品图 13"],
+  ["https://a.lovart.ai/artifacts/user/iGuQpsNBwtI1ZL7O.jpg",2048/1375,"五大禅林 详情页作品图 14"]],
+ /* 旧方案：PDF 内嵌抠图（漏第 5/6/10-14 页），本轮起详情页改用用户导出的 14 张整页图；此数组保留仅作回退参考，不再被引用 */
+ imgsLegacy:[
+  ["page2_img2.jpeg",0.74,"店面文创产品货架实景"],
+  ["page3_img3.jpeg",1.99],["page3_img4.jpeg",1.99],["page3_img5.jpeg",1.99],
+  ["page4_img6.jpeg",1.33,"寺庙石砌山门建筑实景"],
+  ["page4_img7.jpeg",0.75],["page4_img8.jpeg",0.75],["page4_img9.jpeg",0.75],["page4_img10.jpeg",0.75],
+  ["page4_img11.jpeg",0.75],["page4_img12.jpeg",0.75],["page4_img13.jpeg",0.75],["page4_img14.jpeg",0.75],
+  ["page7_img15.jpeg",1.0,"国潮矢量插画主视觉"],
+  ["page7_img16.jpeg",1.42],["page7_img17.jpeg",1.42],["page7_img18.jpeg",1.42],["page7_img19.jpeg",1.42],
+  ["page8_img20.jpeg",0.75],["page8_img21.jpeg",0.75],["page8_img22.jpeg",0.75],["page8_img23.jpeg",0.75],
+  ["page8_img24.jpeg",0.75],["page8_img25.jpeg",0.75],["page8_img26.jpeg",0.75],["page8_img27.jpeg",0.75],
+  ["page8_img28.jpeg",0.75],["page8_img29.jpeg",0.75],["page8_img30.jpeg",0.75],["page8_img31.jpeg",0.75],
+  ["page8_img32.jpeg",0.75],
+  ["page9_img33.jpeg",0.75],["page9_img34.jpeg",0.75],["page9_img35.jpeg",0.75],["page9_img36.jpeg",0.75],
+  ["page9_img37.jpeg",0.75],["page9_img38.jpeg",0.75],["page9_img39.jpeg",0.75],["page9_img40.jpeg",0.75],
+  ["page9_img41.jpeg",0.75],["page9_img42.jpeg",0.75],["page9_img43.jpeg",0.75],["page9_img44.jpeg",0.75],
+  ["page9_img45.jpeg",0.75],["page9_img46.jpeg",0.75],["page9_img47.jpeg",0.75],["page9_img48.jpeg",0.75],
+  ["page9_img49.jpeg",0.75],["page9_img50.jpeg",0.75]]},
+{slug:"sishi-chaxu",name:"四时茶叙",category:"品牌视觉 · 门店应用",metaLabel:"02 / 品牌视觉 · 门店应用",base:BASE2,
+ pdfUrl:"", /* PDF embed：本轮不赋值 -> 继续走下方 imgs 图序路径；补上 URL 即自动启用查看器，无需改逻辑 */
+ wideFigs:true, /* Final pages 02 fix：案例 02 图幅 10 列（.figs.wide .fig{grid-column:2/12}），与案例 01 同一字段同一机制；案例 03 不设该字段，仍 8 列 */
+ cover:{file:"page1_img1.jpeg",ratio:1.77,alt:"四时茶叙 封面：翠绿茶园与蓝天白云实景，中央白色四季图形 Logo 与「四时茶叙」字样"}, /* Revamp 后不再被引用（首页封面改用 coverPage） */
+ coverPage:{url:"https://assets-persist.lovart.ai/pdf_extracts/8cbe68c459f38b4a/pages/page_1.jpg",ratio:1.414,alt:"四时茶叙 案例 PDF 首页整页渲染图"},
+ pages:{hash:"8cbe68c459f38b4a",count:17,confirmed:[1],ratio:2048/1152}, /* 整页图源：实测仅 page_1 存在（2048×1152），page_2 起 404，故详情页不可用整页图；保留此字段供资产补齐后启用 */
+ intro:[
+  {t:"“四时茶叙”是以四季风物入茶的新式茶饮品牌，主打松弛社交与本真茶味，品牌理念为“时萃·循季寻味”“鲜采·原叶本香”“茶叙·以茶会友”“慢品·静享闲时”。"},
+  {lead:"品牌标志由象征四季的四色图形与中文字体组成，专属标准色为：",sw:[["玫红·春绯","#CC488B"],["草绿·青芜","#80B334"],["暖橙·秋珀","#D87A35"],["香紫·冬堇","#9677D4"]]},
+  {t:"产品线分为常规经典与四季限定两大板块，深度结合时令茶底。视觉识别系统全面延展至门店招牌、四色限定纸杯、杯套、外卖袋、手提袋、罐装茶礼盒、围裙、棒球帽、团扇、钥匙扣与口罩等周边物料。"}],
+ imgs:[
+  /* Final pages 02：案例 02 详情页图源 = 用户导出的 17 张整页图（绝对 URL 逐字照抄，见顶部 Asset map [Final pages 02]）；
+     原始导出文件名依次 = 作品集封面-18 … -34（导出批次编号，仅备查，不入 alt）；
+     第 12 张 2047×1153 与其余 16 张 2048×1152 比例不同，是刻意事实（导出时的一像素差异），不归一化、不裁切补齐 */
+  ["https://a.lovart.ai/artifacts/user/d6aAPwpm9o1W7GVG.jpg",2048/1152,"四时茶叙 详情页作品图 1"],
+  ["https://a.lovart.ai/artifacts/user/4GT5W0Pbnu9Sohkc.jpg",2048/1152,"四时茶叙 详情页作品图 2"],
+  ["https://a.lovart.ai/artifacts/user/u5tOzcjiibL1mXZe.jpg",2048/1152,"四时茶叙 详情页作品图 3"],
+  ["https://a.lovart.ai/artifacts/user/ukh9nuPZX7GKMaJA.jpg",2048/1152,"四时茶叙 详情页作品图 4"],
+  ["https://a.lovart.ai/artifacts/user/K9vdeLCIz7Cud6ag.jpg",2048/1152,"四时茶叙 详情页作品图 5"],
+  ["https://a.lovart.ai/artifacts/user/s8nG9AH7Nc2nDyaH.jpg",2048/1152,"四时茶叙 详情页作品图 6"],
+  ["https://a.lovart.ai/artifacts/user/AP6IMtZBb9JhMvGA.jpg",2048/1152,"四时茶叙 详情页作品图 7"],
+  ["https://a.lovart.ai/artifacts/user/luFX2Kcdaa5SKyWR.jpg",2048/1152,"四时茶叙 详情页作品图 8"],
+  ["https://a.lovart.ai/artifacts/user/LngGmEr6dnETpGxH.jpg",2048/1152,"四时茶叙 详情页作品图 9"],
+  ["https://a.lovart.ai/artifacts/user/15abEuy28G8d1NDo.jpg",2048/1152,"四时茶叙 详情页作品图 10"],
+  ["https://a.lovart.ai/artifacts/user/RFnsTjAHsXA7cPAp.jpg",2048/1152,"四时茶叙 详情页作品图 11"],
+  ["https://a.lovart.ai/artifacts/user/6y2MXMTQSK5CD0UE.jpg",2047/1153,"四时茶叙 详情页作品图 12"],
+  ["https://a.lovart.ai/artifacts/user/mPzpdRV4HRGGiaHl.jpg",2048/1152,"四时茶叙 详情页作品图 13"],
+  ["https://a.lovart.ai/artifacts/user/XvjwVMOClp73lrA7.jpg",2048/1152,"四时茶叙 详情页作品图 14"],
+  ["https://a.lovart.ai/artifacts/user/JsKicrytSjLJoZLt.jpg",2048/1152,"四时茶叙 详情页作品图 15"],
+  ["https://a.lovart.ai/artifacts/user/8M1MS8C9Oi1POJL3.jpg",2048/1152,"四时茶叙 详情页作品图 16"],
+  ["https://a.lovart.ai/artifacts/user/5mOOuV0v9SGqcdKH.jpg",2048/1152,"四时茶叙 详情页作品图 17"]],
+ /* 旧方案：PDF 内嵌抠图（漏页且同页多图按图元存储序），本轮起详情页改用用户导出的 17 张整页图；此数组保留仅作回退参考，不再被引用 */
+ imgsLegacy:[
+  ["page2_img2.jpeg",1.7],["page3_img3.jpeg",1.7],
+  ["page10_img4.jpeg",0.75],["page10_img5.jpeg",0.75],["page10_img6.jpeg",0.75],["page10_img7.jpeg",0.75],["page10_img8.jpeg",0.75],
+  ["page11_img9.jpeg",0.75],["page11_img10.jpeg",0.75],["page11_img11.jpeg",0.75],
+  ["page11_img12.jpeg",1.7],
+  ["page11_img13.jpeg",0.75],["page11_img14.jpeg",0.75],["page11_img15.jpeg",0.75],["page11_img16.jpeg",0.75],
+  ["page11_img17.jpeg",0.75],["page11_img18.jpeg",0.75],["page11_img19.jpeg",0.75],["page11_img20.jpeg",0.75],
+  ["page11_img21.jpeg",0.75],["page11_img22.jpeg",0.75],["page11_img23.jpeg",0.75],["page11_img24.jpeg",0.75],
+  ["page11_img25.jpeg",0.75],["page11_img26.jpeg",0.75],["page11_img27.jpeg",0.75],["page11_img28.jpeg",0.75],
+  ["page11_img29.jpeg",0.75],["page11_img30.jpeg",0.75],["page11_img31.jpeg",0.75],["page11_img32.jpeg",0.75],
+  ["page12_img33.jpeg",0.75],["page12_img34.jpeg",0.75],
+  ["page13_img35.jpeg",0.75],
+  ["page14_img36.jpeg",1.7],
+  ["page15_img37.jpeg",1.7],["page15_img38.jpeg",1.7],
+  ["page16_img39.jpeg",1.7],
+  ["page17_img40.jpeg",1.7]]},
+{slug:"sichou-zhiyi",name:"丝绸之翼",category:"博物馆文创 · 产品设计",metaLabel:"03 / 博物馆文创 · 产品设计",base:BASE3,
+ pdfUrl:"", /* PDF embed：本轮不赋值 -> 继续走下方 imgs 图序路径；补上 URL 即自动启用查看器，无需改逻辑 */
+ wideFigs:true, /* Final pages 03 fix：案例 03 图幅 10 列（.figs.wide .fig{grid-column:2/12}），与案例 01/02 同一字段同一机制；至此三案例图幅统一 */
+ cover:{file:"page1_img1.jpeg",ratio:1.78,alt:"丝绸之翼 封面：落日沙丘与驼队剪影，中央白色翼马图形与「丝绸之翼」字样"}, /* Revamp 后不再被引用（首页封面改用 coverPage） */
+ coverPage:{url:"https://assets-persist.lovart.ai/pdf_extracts/036a3fd987a7da61/pages/page_1.jpg",ratio:1.414,alt:"丝绸之翼 案例 PDF 首页整页渲染图"},
+ pages:{hash:"036a3fd987a7da61",count:15,confirmed:[1],ratio:2048/1152}, /* 整页图源：实测仅 page_1 存在（2048×1152），page_2 起 404，故详情页不可用整页图；保留此字段供资产补齐后启用 */
+ intro:[
+  {t:"《丝绸之翼》为校企合作系列文创产品设计项目，以敦煌市博物馆的馆藏资源为文化底座，核心目标是让丝路意象“活起来、走出去”。"},
+  {t:"设计灵感源自古代丝绸之路上最具代表性的意象——翼马。主视觉中一匹身披云纹的翼马凌空跃起，舒展的羽翼宛如流动的丝绸缎带；马身融入卷草、忍冬等西域经典纹样，并与中国传统祥云、回纹相呼应，同时结合火焰纹、莲花纹、飞鸟、三兔共耳、联珠纹、飞燕等敦煌标志性文化符号。"},
+  {lead:"标准色提取唐代三彩之黄、青、白为主调，辅以敦煌壁画的朱砂与石绿：",sw:[["驼砂","#E29C4E"],["瀚海青","#6DB3AB"],["玄骥","#231815"]]},
+  {t:"产品矩阵涵盖抱枕、马克杯、鼠标垫、杯垫、睡眠眼罩、T恤、丝巾、棒球帽、帆布袋、精装笔记本、折扇、手机壳、金属徽章、书签与纸胶带。"}],
+ imgs:[
+  /* Final pages 03：案例 03 详情页图源 = 用户导出的 15 张整页图（绝对 URL 逐字照抄，见顶部 Asset map [Final pages 03]）；
+     原始导出文件名依次 = 作品集封面-35 … -49（导出批次编号，仅备查，不入 alt）；
+     本轮 15 条 ratio 全部为 2048/1152（≈1.7778），无一异形 —— 与案例 01 第 14 张（2048/1375）、案例 02 第 12 张（2047/1153）
+     的刻意差异不同，此处「全部一致」是本轮事实，不为与前两案例对齐而制造差异、不归一化、不裁切补齐 */
+  ["https://a.lovart.ai/artifacts/user/S1YZtZYJDh6SkKPD.jpg",2048/1152,"丝绸之翼 详情页作品图 1"],
+  ["https://a.lovart.ai/artifacts/user/mAgH5sDjCXFOml2F.jpg",2048/1152,"丝绸之翼 详情页作品图 2"],
+  ["https://a.lovart.ai/artifacts/user/G6eQIGB0VAEjSLdW.jpg",2048/1152,"丝绸之翼 详情页作品图 3"],
+  ["https://a.lovart.ai/artifacts/user/Rj5AEIA4lMFeh9nh.jpg",2048/1152,"丝绸之翼 详情页作品图 4"],
+  ["https://a.lovart.ai/artifacts/user/YC5ZlRCW9NHTAbCh.jpg",2048/1152,"丝绸之翼 详情页作品图 5"],
+  ["https://a.lovart.ai/artifacts/user/4YZzKZSAEL1Zc2oB.jpg",2048/1152,"丝绸之翼 详情页作品图 6"],
+  ["https://a.lovart.ai/artifacts/user/GYuo2wog5N9t4Nos.jpg",2048/1152,"丝绸之翼 详情页作品图 7"],
+  ["https://a.lovart.ai/artifacts/user/WcLbyboHU53vpybd.jpg",2048/1152,"丝绸之翼 详情页作品图 8"],
+  ["https://a.lovart.ai/artifacts/user/eB9ivJNjbPd40tVC.jpg",2048/1152,"丝绸之翼 详情页作品图 9"],
+  ["https://a.lovart.ai/artifacts/user/kAKBoftfoN8qrt0Q.jpg",2048/1152,"丝绸之翼 详情页作品图 10"],
+  ["https://a.lovart.ai/artifacts/user/NcgJuL1VP9EQ3X3C.jpg",2048/1152,"丝绸之翼 详情页作品图 11"],
+  ["https://a.lovart.ai/artifacts/user/kwGRAb09RA5RQliI.jpg",2048/1152,"丝绸之翼 详情页作品图 12"],
+  ["https://a.lovart.ai/artifacts/user/iy3qlz5Vq1A0PGYP.jpg",2048/1152,"丝绸之翼 详情页作品图 13"],
+  ["https://a.lovart.ai/artifacts/user/uz2APyp6ST7vEZFM.jpg",2048/1152,"丝绸之翼 详情页作品图 14"],
+  ["https://a.lovart.ai/artifacts/user/kVUQI537229zB4xT.jpg",2048/1152,"丝绸之翼 详情页作品图 15"]],
+ /* 旧方案：PDF 内嵌抠图（15 页 PDF 抠出 37 条，同页多图被拆开且存在漏页），本轮起详情页改用用户导出的 15 张整页图；此数组保留仅作回退参考，不再被引用 */
+ imgsLegacy:[
+  ["page1_img2.png",1.0],
+  ["page3_img3.jpeg",0.75],["page3_img4.jpeg",0.75],["page3_img5.jpeg",0.75],["page3_img6.jpeg",0.75],
+  ["page3_img7.jpeg",0.75],["page3_img8.jpeg",0.75],["page3_img9.jpeg",0.75],["page3_img10.jpeg",0.75],["page3_img11.jpeg",0.75],
+  ["page8_img12.jpeg",0.75],
+  ["page9_img13.jpeg",0.75],["page9_img14.jpeg",0.75],["page9_img15.jpeg",0.75],["page9_img16.jpeg",0.75],
+  ["page9_img17.jpeg",0.75],["page9_img18.jpeg",0.75],["page9_img19.jpeg",0.75],["page9_img20.jpeg",0.75],
+  ["page9_img21.jpeg",0.75],["page9_img22.jpeg",0.75],["page9_img23.jpeg",0.75],["page9_img24.jpeg",0.75],
+  ["page9_img25.jpeg",0.75],["page9_img26.jpeg",0.75],["page9_img27.jpeg",0.75],["page9_img28.jpeg",0.75],
+  ["page9_img29.jpeg",0.75],["page9_img30.jpeg",0.75],
+  ["page10_img31.jpeg",1.7],
+  ["page11_img32.jpeg",0.75],
+  ["page12_img33.jpeg",1.7],["page12_img34.jpeg",1.7],
+  ["page13_img35.jpeg",1.7],
+  ["page14_img36.jpeg",0.75],["page14_img37.jpeg",0.75],
+  ["page15_img38.jpeg",1.7]]}
+];
+
+var AWARDS=[
+ ["筑梦文旅——辽宁省大学生影像艺术创新创业大赛","工业的曙光　二等奖"],
+ ["第三届“第嘉杯”辽宁省普通高等学校大学生中华优秀传统文化创新设计大赛","茶颜悦色　一等奖"],
+ ["第四届辽宁省近视防控创意大赛","近视眼中的名画　三等奖"],
+ ["第十六届全国大学生广告艺术大赛（辽宁赛区）","天地任我　一等奖"],
+ ["第十六届全国大学生广告艺术大赛（辽宁赛区）","敬隐于点　三等奖"],
+ ["第十六届全国大学生广告艺术大赛（辽宁赛区）","筑梦未来　一等奖"],
+ ["第十六届全国大学生广告艺术大赛（辽宁赛区）","同行未来　一等奖"],
+ ["“山海有情”杯大学生文创大赛","四季之花　二等奖"],
+ ["“山海有情”杯大学生文创大赛","百寿康宁　三等奖"],
+ ["第14届未来设计师·全国高校数字艺术设计大赛省级赛（辽宁）","三等奖"]
+];
+var BIO=[
+ "您好，我是李因炘，拥有 3 年品牌设计相关经验，专注品牌视觉体系搭建与创意落地。",
+ "擅长品牌 IP、版式插画、视觉延展等设计工作，能够从品牌定位出发，打造风格统一且有记忆点的视觉方案。",
+ "我热爱设计，对审美与细节有较高要求，习惯兼顾创意表达、落地可行性与品牌传播需求。",
+ "善于沟通理解需求，高效推进项目，持续保持对设计趋势的学习，期待可以用设计助力品牌成长。"
+];
+var INDEX_META="品牌 / 文创 / 平面　共 3 项";
+var INDEX_TAG="专注品牌视觉体系搭建与创意落地。";
+/* Interaction fix C：首页封面 hover 第二层的数组下标（0-based），对应 brief 的 1-based 第 4 / 9 / 9 条；
+   URL 一律从 PROJECTS[i].imgs 取值，不在此处写任何字面 URL */
+var COVER_HOVER=[3,8,8];
+
+/* ══ 工具 ══════════════════════════════════════════════ */
+var REDUCED=window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+function el(tag,cls,html){var n=document.createElement(tag);if(cls)n.className=cls;if(html!=null)n.innerHTML=html;return n;}
+function esc(s){return s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");}
+function pad2(n){return (n<10?"0":"")+n;}
+
+/* ══ Interaction fix D2：图片 0.4s 淡入（fail-open）══
+   CSS 默认态 .ph img{opacity:1} —— 隐藏态只能由本函数主动加 .img-fade 产生；缓存命中不加类直接显示；
+   load 里加 .in；error 里移除 .img-fade（破图也露出浏览器原生破图占位，绝不永久隐形）；
+   加类后启 1200ms 强制兜底定时器，到点无条件移除 .img-fade。全程只动 opacity：
+   无 blur / 无滤镜 / 无缩放 / 无位移（用户硬要求「图片不能变模糊」，任何一刻有模糊帧即违约）。
+   与 capApplyNow（只管 width / aspect-ratio）与 reveal 的 .rv 完全独立，两套机制各管各的。 */
+function imgFade(img,setSrc,url){
+  var cached=false;
+  try{cached=!!(img.complete&&img.naturalWidth>0);}catch(e){cached=false;}
+  if(!cached&&url){ /* 缓存命中判定第二路：同一 URL 已在文档内解码过（浏览器内存缓存）-> 同样不加类、直接显示 */
+    try{
+      var prev=document.querySelector('img[src="'+String(url).replace(/"/g,"")+'"]');
+      if(prev&&prev!==img&&prev.complete&&prev.naturalWidth>0)cached=true;
+    }catch(e2){}
+  }
+  if(cached){setSrc();return;} /* 同一帧内判定为缓存命中 -> 不加类，直接显示 */
+  img.classList.add("img-fade");
+  var done=false;
+  function reveal(){
+    if(done)return;
+    done=true;
+    if(fallback)clearTimeout(fallback);
+    img.classList.add("in");
+  }
+  function force(){ /* 兜底：任何异常路径下图片都不会永久不可见 */
+    if(done)return;
+    done=true;
+    img.classList.remove("img-fade");
+  }
+  var fallback=setTimeout(force,1200);
+  img.addEventListener("load",reveal);
+  img.addEventListener("error",function(){ /* 破图：移除隐藏类，露出浏览器原生破图占位 */
+    if(done)return;
+    done=true;
+    if(fallback)clearTimeout(fallback);
+    img.classList.remove("img-fade");
+  });
+  setSrc();
+}
+
+/* 图片占位块：按 ratio 预留高度，load 后以 intrinsic 比例校正；opts.cap 时另施加「渲染宽度不超原始像素宽」的防模糊上限；
+   opts.hover 时叠第二层（Interaction fix C：首页封面 crossfade，延迟加载 + 同一淡入机制） */
+function makePh(url,ratio,alt,opts){
+  opts=opts||{};
+  var ph=el("div","ph"+(opts.clip?" overflowclip":"")+(opts.rv?" rv":""));
+  ph.style.aspectRatio=String(ratio);
+  var img=el("img");
+  img.alt=alt; img.decoding="async";
+  if(opts.eager){img.fetchPriority="high";}else{img.loading="lazy";}
+  /* D2：src 延到淡入判定之后才写入（仍在同一同步帧内），保证 .img-fade 先于任何 load 事件落定 */
+  imgFade(img,function(){img.src=url;},url);
+  img.addEventListener("load",function(){
+    if(img.naturalWidth&&img.naturalHeight){
+      var r=img.naturalWidth/img.naturalHeight;
+      ph.style.aspectRatio=String(r);
+      if(opts.cap)capApplyNow(img,ph);
+      if(opts.onRatio)opts.onRatio(r);
+    }
+  });
+  if(opts.onError)img.addEventListener("error",function(){opts.onError();}); /* 通用失败钩子（Revamp2 revert 后无调用方，不依赖 pages.confirmed） */
+  ph.appendChild(img);
+  if(opts.hover){
+    /* Interaction fix C：第二层 = 项目内另一张图（URL 从 imgs 数组取值，不另写），alt="" + aria-hidden="true" 纯装饰；
+       DOM 里先只写 data-hover-src，首次 mouseenter / focusin 时才赋 src（首屏零额外请求）；
+       两层同处 .ph 内 -> 既有 scale(1.035) 与 ±4% 视差同步作用于两层 */
+    var h=el("img","hov");
+    h.alt=""; h.setAttribute("aria-hidden","true"); h.decoding="async"; h.loading="lazy";
+    h.setAttribute("data-hover-src",opts.hover);
+    var hLoaded=false;
+    function loadHover(){
+      if(hLoaded)return;
+      hLoaded=true;
+      var hs=h.getAttribute("data-hover-src");
+      if(!hs)return;
+      h.src=hs; /* 赋值后即使尚未加载完也照常执行淡入（短暂灰底优于阻塞）；
+                   不走 imgFade：第二层的可见性完全归 crossfade 规则管（.in 会把 opacity 提到 1 而破坏未 hover 时的隐藏态）；
+                   装饰层（alt="" / aria-hidden）加载失败时保持隐藏，不影响任何信息 */
+      h.addEventListener("load",function(){
+        if(h.naturalWidth&&h.naturalHeight)ph.style.aspectRatio=String(h.naturalWidth/h.naturalHeight);
+      });
+    }
+    ph.addEventListener("mouseenter",loadHover);
+    ph.addEventListener("focusin",loadHover);
+    ph.appendChild(h);
+  }
+  if(opts.cap)capRegister(img,ph); /* 已缓存的图片 load 可能早于布局落定，登记后由 mount/resize 的 recap 补算 */
+  return ph;
+}
+
+/* ══ 防模糊上限（Revamp 3c）══
+   每张图实际渲染宽度 = min(naturalWidth, 父容器 clientWidth)：窄图不被拉大发糊（.ph 同步等宽 + margin-inline:auto 居中），
+   宽图填满 8 列容器但不超出。不用 object-fit、不用 transform:scale、不给 .ph 设固定高度；不加 srcset/sizes/压缩参数。
+   aspect-ratio 仍由 load 回调按真实比例校正，因此容器高度恰好包住图片、不留 #EAEAEA 空隙。 */
+var capSet=[];
+function capApplyNow(img,ph){
+  if(!img||!ph||!img.naturalWidth)return;
+  var parent=ph.parentNode;
+  var cw=parent?(parent.clientWidth||0):0;
+  if(cw<=0)return; /* 布局未落定：先保持 CSS width:100%+max-width:100%，由 mount 后 / resize 的 recap 补算 */
+  var w=Math.min(img.naturalWidth,cw);
+  img.style.width=w+"px";
+  ph.style.width=w+"px";
+  ph.style.marginInline="auto";
+}
+function capRegister(img,ph){
+  capSet.push({img:img,ph:ph});
+  capApplyNow(img,ph);
+}
+function recapAll(){
+  var keep=[];
+  for(var i=0;i<capSet.length;i++){
+    var e=capSet[i];
+    if(!e.img.isConnected||!e.ph.isConnected)continue; /* 视图已移除 -> 除名 */
+    capApplyNow(e.img,e.ph);
+    keep.push(e);
+  }
+  capSet=keep;
+}
+/* 独立的 resize 去抖监听（150ms），不与 sweep 的去抖定时器共用变量、互不打断 */
+(function(){
+  var ct=null;
+  window.addEventListener("resize",function(){clearTimeout(ct);ct=setTimeout(recapAll,150);});
+  window.addEventListener("orientationchange",function(){recapAll();setTimeout(recapAll,180);});
+})();
+
+/* ══ reveal（行遮罩 + stagger 60ms，fail-open） ══════════ */
+var rvIO=null;
+function ensureRvIO(){
+  if(rvIO||REDUCED||!("IntersectionObserver" in window))return;
+  try{
+  rvIO=new IntersectionObserver(function(entries){
+    var i=0;
+    entries.forEach(function(en){
+      if(en.isIntersecting){
+        var t=en.target;
+        t.style.transitionDelay=((i<8)?i*60:0)+"ms"; /* stagger 上限 8 项，超出 0ms */
+        t.classList.add("on");
+        rvIO.unobserve(t);
+        i++;
+      }
+    });
+  },{threshold:0,rootMargin:"0px 0px -4% 0px"});
+  }catch(err){rvIO=null;} /* 构造失败（含控制台替换 IO 的验收场景）-> 走 sweep 全显 */
+}
+/* 兜底扫描：把仍处于预备隐藏态的 .rv 一律补成终态，任何失效路径下内容都可见 */
+function sweep(root){
+  var scope=root||document;
+  if(!scope.querySelectorAll)return;
+  var list=scope.querySelectorAll(".rv.pre:not(.on)");
+  for(var i=0;i<list.length;i++){
+    list[i].classList.add("on");
+    if(rvIO)rvIO.unobserve(list[i]);
+  }
+}
+function bindReveals(scope){
+  if(REDUCED){scope.querySelectorAll(".rv").forEach(function(n){n.classList.add("on");});return;}
+  var nodes=[];
+  scope.querySelectorAll(".rv").forEach(function(n){
+    if(n.hasAttribute("data-plx"))return; /* 视差容器 inline transform 归 plxLoop 独占，reveal 不介入 */
+    if(!n.classList.contains("pre"))n.classList.add("pre"); /* 先加预备类 */
+    nodes.push(n);
+  });
+  ensureRvIO();
+  try{
+    if(rvIO)nodes.forEach(function(n){rvIO.observe(n);}); /* 同一帧内再 observe，中间无强制样式解析 */
+    else sweep(scope); /* 无 IO 支持：直接全显 */
+  }catch(err){rvIO=null;sweep(scope);} /* observe 异常也不允许留下隐藏态 */
+  /* 三次兜底：mount 后第 2 帧（双 rAF，让 IO 首帧回调先跑完）、900ms、2000ms */
+  requestAnimationFrame(function(){requestAnimationFrame(function(){sweep(scope);});});
+  setTimeout(function(){sweep(scope);},900);
+  setTimeout(function(){sweep(scope);},2000);
+}
+/* 全局兜底触发 */
+(function(){
+  function sweepDoc(){sweep(document);}
+  if(document.readyState==="complete")sweepDoc();
+  else window.addEventListener("load",sweepDoc);
+  var rt=null;
+  function debounced(){clearTimeout(rt);rt=setTimeout(sweepDoc,150);}
+  window.addEventListener("resize",debounced);
+  window.addEventListener("orientationchange",function(){sweepDoc();debounced();});
+  document.addEventListener("visibilitychange",function(){if(document.visibilityState==="visible")sweepDoc();});
+  window.addEventListener("beforeprint",sweepDoc);
+  try{
+    var mqp=window.matchMedia("print");
+    var onPrint=function(e){if(e.matches)sweepDoc();};
+    if(mqp.addEventListener)mqp.addEventListener("change",onPrint);
+    else if(mqp.addListener)mqp.addListener(onPrint);
+  }catch(err){}
+})();
+
+/* ══ 滚动视差（rAF + IO，仅视口内计算） ════════════════ */
+var plxSet=new Set(),plxTick=false;
+var plxIO=("IntersectionObserver" in window)?new IntersectionObserver(function(entries){
+  entries.forEach(function(en){
+    if(en.isIntersecting)plxSet.add(en.target);else plxSet.delete(en.target);
+  });
+  kickPlx();
+},{threshold:0}):null;
+function plxWatch(node){ if(!REDUCED&&plxIO&&node.hasAttribute("data-plx"))plxIO.observe(node); }
+function plxForget(node){ plxSet.delete(node); if(plxIO)plxIO.unobserve(node); }
+function kickPlx(){
+  if(REDUCED||plxTick||!plxSet.size)return;
+  plxTick=true;
+  requestAnimationFrame(plxLoop);
+}
+function plxLoop(){
+  plxTick=false;
+  if(REDUCED||!plxSet.size)return;
+  var vh=window.innerHeight;
+  plxSet.forEach(function(node){
+    var box=node.getBoundingClientRect();
+    if(box.height<=0)return;
+    var p=((box.top+box.height/2)-vh/2)/(vh/2+box.height/2); /* -1..1 */
+    p=Math.max(-1,Math.min(1,p));
+    node.style.transform="translate3d(0,"+(p*-4).toFixed(3)+"%,0)";
+  });
+  requestAnimationFrame(plxLoop);
+}
+function watchPlx(scope){
+  if(REDUCED||!plxIO)return;
+  scope.querySelectorAll("[data-plx]").forEach(plxWatch);
+}
+window.addEventListener("scroll",kickPlx,{passive:true});
+
+/* ══ 视图构建 ══════════════════════════════════════════ */
+function backLink(href,text){return '<a class="back" href="'+href+'">← '+text+'</a>';}
+
+/* figText / pad2：放大层控制条序号文案的唯一来源（原 sticky 白条已整套移除，此二者保留） */
+function figText(no,name,cur,total){return {id:pad2(no)+" "+name,n:pad2(cur)+" / "+pad2(total)};}
+
+/* ══ Interaction fix A2：放大层（lightbox）══
+   挂在 document.body 直接子节点（不进 #viewHost / #app，避开视图切换清理与编辑层 MutationObserver 守卫）；
+   --bg 实色满屏，图自然比例无裁切无变形；缩放上限严格卡在 100% 原始像素（naturalWidth / 适应显示宽），用户无法把图放到糊。
+   新增元素一律不带 data-lvt-eid。 */
+var LB=null;
+function lbOpen(p,idx,seq,trigger){
+  lbClose();
+  var list=p.imgs||[];
+  var total=list.length;
+  if(!total||seq<1||seq>total)return;
+  var root=el("div","lb");
+  root.setAttribute("role","dialog");
+  root.setAttribute("aria-modal","true");
+  root.innerHTML=
+    '<div class="lb-bar">'+
+      '<span class="lb-cap"></span>'+
+      '<button type="button" class="lb-close">关闭 Esc</button>'+
+    '</div>'+
+    '<div class="lb-stage"><img class="lb-img" alt="" tabindex="0"></div>';
+  var cap=root.querySelector(".lb-cap"),
+      closeBtn=root.querySelector(".lb-close"),
+      stage=root.querySelector(".lb-stage"),
+      img=root.querySelector(".lb-img");
+  document.body.appendChild(root); /* body 直接子节点 */
+
+  /* 锁页面滚动：记住 html/body 各自的原内联值，关闭时逐字还原，不写死成空串 */
+  var htmlOv=document.documentElement.style.overflow,bodyOv=document.body.style.overflow;
+  document.documentElement.style.overflow="hidden";
+  document.body.style.overflow="hidden";
+
+  var cur=seq,fitS=1,maxS=1,s=1,tx=0,ty=0,ready=false,token=0;
+  function paint(){
+    var t=figText(idx+1,p.name,cur,total);
+    cap.textContent=t.id+" · "+t.n; /* Pinned：{编号} {案例名} · {序号} / {总数} */
+    root.setAttribute("aria-label",img.alt||t.id);
+  }
+  function apply(){img.style.transform="translate3d("+tx.toFixed(2)+"px,"+ty.toFixed(2)+"px,0) scale("+s.toFixed(5)+")";}
+  function clampPan(){
+    var sw=stage.clientWidth||0,sh=stage.clientHeight||0,w=img.offsetWidth*s,h=img.offsetHeight*s;
+    if(w<=sw)tx=(sw-w)/2;else tx=Math.min(0,Math.max(sw-w,tx));
+    if(h<=sh)ty=(sh-h)/2;else ty=Math.min(0,Math.max(sh-h,ty));
+  }
+  function fit(){
+    var sw=stage.clientWidth||0,sh=stage.clientHeight||0;
+    var iw=img.naturalWidth||sw||1,ih=img.naturalHeight||sh||1;
+    var avW=Math.max(1,sw-32),avH=Math.max(1,sh-32); /* 减去 32px 安全边（控制条高度已由 flex 扣除） */
+    fitS=Math.min(avW/iw,avH/ih);
+    /* 上限 = naturalWidth / 当前适应显示宽（iw*fitS）—— 恰好 100% 像素级 1:1，绝不允许超过 */
+    maxS=(img.naturalWidth>0&&fitS>0&&iw>0)?(img.naturalWidth/(iw*fitS)):1;
+    if(!(maxS>=1))maxS=1;
+  }
+  function show(){
+    if(!ready)return;
+    s=fitS;tx=0;ty=0;clampPan();apply();
+  }
+  function zoomAt(cx,cy,next){
+    next=Math.min(maxS,Math.max(fitS,next)); /* 严格 clamp 在 [适应视口 1x, 100% 原始像素] */
+    if(next===s)return;
+    var k=next/s;
+    tx=cx-(cx-tx)*k;ty=cy-(cy-ty)*k;s=next; /* 以指针为锚 */
+    clampPan();apply();
+  }
+  function loadSeq(n){
+    n=Math.max(1,Math.min(total,n)); /* 首/末张停在边界不循环 */
+    cur=n;
+    var it=list[n-1];
+    var src=/^https?:/i.test(it[0])?it[0]:p.base+it[0]; /* 与 addFig 同一判定，逐字复用数组里的 URL */
+    var alt=(it[2]!=null)?it[2]:(p.name+" 作品图 "+n);
+    img.alt=alt;
+    paint();
+    var my=++token;
+    ready=false;s=0;img.style.transform="translate3d(0,0,0) scale(1)";
+    function onReady(){
+      if(my!==token)return;
+      ready=true;fit();show();
+    }
+    img.addEventListener("load",onReady);
+    img.addEventListener("error",onReady); /* 失败也不留下不可见状态 */
+    img.src=src; /* 打开/翻页那一刻才赋值，不预加载 46 张 */
+    if(img.complete&&img.naturalWidth>0)onReady(); /* 缓存命中 */
+  }
+  /* 滚轮缩放：preventDefault + 指针锚点（{passive:false} 才能阻止页面滚动） */
+  stage.addEventListener("wheel",function(e){
+    if(!ready)return;
+    e.preventDefault();
+    var r=stage.getBoundingClientRect();
+    zoomAt(e.clientX-r.left,e.clientY-r.top,s*Math.exp(-e.deltaY*0.002));
+  },{passive:false});
+  /* 双击：在适应视口 1x 与 100% 上限之间切换 */
+  img.addEventListener("dblclick",function(e){
+    if(!ready)return;
+    var r=stage.getBoundingClientRect();
+    if(s>fitS*1.001)zoomAt(e.clientX-r.left,e.clientY-r.top,fitS);
+    else zoomAt(e.clientX-r.left,e.clientY-r.top,maxS);
+  });
+  /* 拖拽平移；触屏不注册任何 touch 事件、不阻止默认行为 -> 保留浏览器原生 pinch */
+  var drag=null,dragMoved=false;
+  function onDown(e){
+    if(e.button!==0)return;
+    drag={x:e.clientX,y:e.clientY,tx:tx,ty:ty};dragMoved=false;
+    e.preventDefault();
+  }
+  function onMove(e){
+    if(!drag)return;
+    var dx=e.clientX-drag.x,dy=e.clientY-drag.y;
+    if(Math.abs(dx)>2||Math.abs(dy)>2)dragMoved=true; /* 拖过就不当作「点空白关闭」 */
+    tx=drag.tx+dx;ty=drag.ty+dy;clampPan();apply();
+  }
+  function onUp(){drag=null;}
+  stage.addEventListener("mousedown",onDown);
+  window.addEventListener("mousemove",onMove);
+  window.addEventListener("mouseup",onUp);
+  /* 关闭途径三：点击图外的 --bg 空白区（mousedown 落点判定，避开拖拽松手误关） */
+  root.addEventListener("mousedown",function(e){
+    root._blankDown=(e.target===root||e.target===stage);
+  });
+  root.addEventListener("click",function(e){
+    if(!root._blankDown||dragMoved)return;
+    root._blankDown=false;
+    if(e.target===root||e.target===stage)lbClose();
+  });
+  closeBtn.addEventListener("click",function(){lbClose();}); /* 关闭途径一 */
+  /* focus trap：Tab 只在「关闭」按钮与图之间循环 */
+  root.addEventListener("keydown",function(e){
+    if(e.key!=="Tab")return;
+    var f=[closeBtn,img];
+    var i=f.indexOf(document.activeElement);
+    if(i<0)i=0;
+    var n=e.shiftKey?(i-1+f.length)%f.length:(i+1)%f.length;
+    e.preventDefault();
+    try{f[n].focus();}catch(err){}
+  });
+  function onResize(){
+    if(!LB||LB.root!==root)return;
+    fit();
+    if(s>maxS)s=maxS;
+    if(s<fitS)s=fitS;
+    clampPan();apply();
+  }
+  window.addEventListener("resize",onResize);
+
+  LB={root:root,trigger:trigger||null,total:total,p:p,idx:idx,cur:function(){return cur;},
+    step:function(d){loadSeq(cur+d);},
+    close:function(){
+      token++; /* 作废在飞回调 */
+      window.removeEventListener("resize",onResize);
+      window.removeEventListener("mousemove",onMove); /* window 级监听逐次摸除，不随多次开关累积 */
+      window.removeEventListener("mouseup",onUp);
+      try{img.removeAttribute("src");}catch(err){}
+      document.documentElement.style.overflow=htmlOv; /* 逐字还原原值 */
+      document.body.style.overflow=bodyOv;
+      if(root.parentNode)root.remove(); /* 移除整层 */
+      LB=null;
+      if(trigger&&trigger.isConnected){try{trigger.focus({preventScroll:true});}catch(err){try{trigger.focus();}catch(e2){}}} /* 焦点归还触发它的那个 .fig-zoom */
+    }};
+  try{closeBtn.focus({preventScroll:true});}catch(err){} /* 打开时焦点移入层内 */
+  loadSeq(seq);
+}
+function lbClose(){
+  if(!LB)return;
+  var c=LB.close;
+  LB=null;
+  try{c();}catch(err){}
+}
+function lbStep(d){if(LB)LB.step(d);}
+function lbRoot(){return LB?LB.root:null;}
+
+function viewIndex(){
+  var v=el("section","view");
+  v.innerHTML=
+   '<div class="grid index-head">'+
+     '<div class="row" style="grid-column:1/-1"><span class="label">作品</span><span class="label">'+esc(INDEX_META)+'</span></div>'+
+     '<h1 class="display index-title rv">案例</h1>'+
+     '<p class="index-tag rv">'+esc(INDEX_TAG)+'</p>'+
+   '</div>'+
+   '<div class="grid"><div class="cases" style="grid-column:1/-1" id="caseList"></div></div>';
+  var list=v.querySelector("#caseList");
+  PROJECTS.forEach(function(p,i){
+    var a=el("a","case case-link");
+    a.href="#/work/"+p.slug;
+    a.setAttribute("data-cursor","view");
+    a.setAttribute("aria-label",p.name+"，"+p.category);
+    a.innerHTML=
+      '<div class="case-row">'+
+        '<span class="case-no label lat rv">'+pad2(i+1)+'</span>'+
+        '<span class="case-name h2 rv">'+esc(p.name)+'</span>'+
+        '<span class="case-cat label rv">'+esc(p.category)+'</span>'+
+      '</div>';
+    var cover=el("span","case-cover");
+    /* Revamp：封面 = 该 PDF 第 1 页整页渲染图（自然比例，不裁切不变形），初始占位 aspect-ratio 1.414，load 后按 naturalWidth/naturalHeight 校正 */
+    /* Interaction fix C：第二层 = 该案例 imgs 数组按下标取的那一条（01 第 4 / 02 第 9 / 03 第 9，1-based），URL 从数组取值不另写；
+       DOM 里先只写 data-hover-src，首次 mouseenter / focusin 时才赋 src（首屏零额外请求）；两层均在 transform 容器内 */
+    var hIt=(p.imgs&&p.imgs[COVER_HOVER[i]])||null;
+    var hSrc=null;
+    if(hIt)hSrc=/^https?:/i.test(hIt[0])?hIt[0]:p.base+hIt[0];
+    cover.appendChild(makePh(p.coverPage.url,p.coverPage.ratio,p.coverPage.alt,{clip:true,eager:i===0,rv:true,hover:hSrc}));
+    cover.setAttribute("data-plx","");
+    a.appendChild(cover);
+    list.appendChild(a);
+  });
+  return v;
+}
+
+/* Revamp：获奖表三列——赛事 / 作品 / 奖项。AWARDS 数组逐字不改，只在渲染层用全角空格 U+3000 拆两段；
+   第 10 条「三等奖」无作品名 -> 作品列留空，不编造。 */
+function awardSplit(s){
+  var i=s.indexOf("　");
+  if(i<0)return {work:"",grade:s};
+  return {work:s.slice(0,i),grade:s.slice(i+1)};
+}
+function viewAbout(){
+  var v=el("section","view about-wrap");
+  var rows=AWARDS.map(function(a){
+    var sp=awardSplit(a[1]);
+    return '<div class="aw-row"><div class="l">'+esc(a[0])+'</div><div class="w">'+esc(sp.work)+'</div><div class="g">'+esc(sp.grade)+'</div></div>';
+  }).join("");
+  v.innerHTML=backLink("#/","返回")+
+   '<div class="about-grid">'+
+     '<div class="about-left">'+
+       '<h2 class="label awards-title rv">获奖</h2>'+
+       '<div class="aw-head"><span class="label">赛事</span><span class="label">作品</span><span class="label g">奖项</span></div>'+
+       '<div class="awards rv">'+rows+'</div>'+
+     '</div>'+
+     '<div class="about-right">'+
+       '<h1 class="display rv">关于</h1>'+
+       '<div class="body">'+BIO.map(function(t){return '<p class="rv">'+esc(t)+'</p>';}).join("")+'</div>'+
+     '</div>'+
+   '</div>';
+  return v;
+}
+
+function swatchHtml(sw){
+  return '<div class="swatches">'+sw.map(function(s){
+    return '<span class="sw"><i style="background:'+s[1]+'"></i>'+esc(s[0])+' '+s[1]+'</span>';
+  }).join("")+'</div>';
+}
+
+function viewDetail(p,idx){
+  var v=el("section","view detail-wrap");
+  var introHtml=p.intro.map(function(par){
+    if(par.sw)return '<p class="rv">'+(par.lead?esc(par.lead):"")+swatchHtml(par.sw)+'</p>';
+    return '<p class="rv">'+esc(par.t)+'</p>';
+  }).join("");
+  v.innerHTML=backLink("#/","返回作品")+
+   '<div class="grid">'+
+     '<div class="detail-meta" style="grid-column:1/-1"><span class="label">'+esc(p.metaLabel)+'</span><span class="label"></span></div>'+
+     '<h1 class="h2 detail-title rv">'+esc(p.name)+'</h1>'+
+     '<div class="detail-intro"><span class="label rv">项目简介</span><div class="body">'+introHtml+'</div></div>'+
+   '</div>'+
+   '<div class="grid figs" id="figs"></div>'+
+   '<div id="sentinelSlot"></div>';
+  var imgList=p.imgs||[];
+  var fgsNode=v.querySelector("#figs");
+  /* Revamp：删除简介下方的通栏封面大图位（#coverSlot）——该图已用作首页封面 */
+  /* Revamp2 revert：图序数据源恢复为 p.imgs（49/39/37 条），按数组下标顺序逐张渲染；不再读取 p.pages / pages.confirmed */
+  /* 分屏追加：每批 6 张（Revamp2 revert：回到 Revamp fix 既定值） */
+  var figs=fgsNode;
+  if(p.wideFigs)figs.classList.add("wide"); /* Final pages fix：案例 01 图幅 10 列（.figs.wide）；02/03 无此字段，仍 8 列 */
+  var state={i:0,done:false,nextAppended:false};
+  function addFig(seq){
+    /* 每张一图：自然比例、不裁切、不变形、不加 object-fit、不加圆角/阴影/滤镜；alt 逐字取数组第三元素（无则机械生成序号式，不新造文案）；
+       cap:true 沿用防模糊渲染宽度上限；无 data-plx（详情页无视差）；首批 2 张 eager */
+    var it=imgList[seq-1];
+    var fig=el("figure","fig");
+    var alt=(it[2]!=null)?it[2]:(p.name+" 作品图 "+seq);
+    var src=/^https?:/i.test(it[0])?it[0]:p.base+it[0]; /* Final pages fix：支持数组内写绝对 URL（案例 01 图源在 a.lovart.ai 域，与 p.base 不同域）；02/03 仍是裸文件名，走拼接分支，行为逐字不变 */
+    var phNode=makePh(src,it[1],alt,{cap:true,eager:seq<=2});
+    fig.appendChild(phNode);
+    /* Interaction fix A1：.ph 之上叠一个纯透明 button（无任何可见装饰），aria-label 逐字 = 「放大查看：」+ 该图现有 alt */
+    var zb=el("button","fig-zoom");
+    zb.type="button";
+    zb.setAttribute("aria-label","放大查看："+alt);
+    zb.setAttribute("data-cursor","zoom"); /* 自定义光标「放大」态（仅 pointer:fine） */
+    zb.addEventListener("click",function(){lbOpen(p,idx,seq,zb);});
+    phNode.appendChild(zb);
+    figs.appendChild(fig);
+  }
+  var sentinel=el("div");sentinel.style.height="1px";
+  var sentIO=null;
+  function appendNext(){
+    var np=PROJECTS[(idx+1)%PROJECTS.length];
+    var a=el("a","next");
+    a.href="#/work/"+np.slug;
+    a.innerHTML='<span class="label">下一个项目</span><span class="h2">'+esc(np.name)+'</span>';
+    v.appendChild(a);
+  }
+  function finish(){
+    if(state.nextAppended)return; /* Revamp2 revert 保留：防重复追加「下一个项目」块 */
+    state.nextAppended=true;
+    if(sentIO&&sentinel){sentIO.unobserve(sentinel);sentinel.remove();sentinel=null;}
+    appendNext();
+  }
+  function batch(){
+    var end=Math.min(state.i+6,imgList.length); /* Revamp2 revert：每批回到 6 张 */
+    for(;state.i<end;state.i++)addFig(state.i+1);
+    if(state.i>=imgList.length){state.done=true;finish();}
+  }
+  /* PDF embed fix：图序分屏启动收进函数——案例 02/03（pdfUrl 为空）立即调用；案例 01 则先起 PDF 查看器，
+     仅在内嵌判定失败时调用（走与 02/03 完全相同的分屏 / sentinel / 防模糊路径） */
+  function startImgFlow(){
+    if(!sentinel){sentinel=el("div");sentinel.style.height="1px";} /* PDF 路径下 finish() 会置 sentinel=null，回退时重建 */
+    batch();
+    if(!state.done){
+      v.querySelector("#sentinelSlot").appendChild(sentinel);
+      sentIO=new IntersectionObserver(function(en){
+        if(en[0].isIntersecting&&!state.done){batch();recapAll();} /* 新追加的一批：布局落定后补算防模糊上限 */
+      },{rootMargin:"700px 0px"}); /* Revamp2 revert：sentinel 提前量回到 700px */
+      sentIO.observe(sentinel);
+    }
+  }
+  if(p.pdfUrl){
+    /* 数据驱动：pdfUrl 非空 -> 图序区换为 PDF 原件查看器（无 border/圆角/阴影，底色 --ph 作加载前占位）；
+       .pdfframe 不加 .rv / clip-path / 视差，上方说明行可参与 reveal */
+    var sec=el("section","pdfwrap grid");
+    sec.innerHTML=
+      '<div class="pdf-note label rv">完整 PDF 原件 · 共 14 页 · 按原顺序排列 · 可缩放查看</div>'+
+      '<div class="pdfview"><iframe class="pdfframe" loading="eager"'+
+        ' title="五大禅林 案例 PDF 原件（共 14 页，按原顺序完整展示）"></iframe></div>'+
+      '<div class="pdf-actions"><a class="pdf-open" href="'+p.pdfUrl+'" target="_blank" rel="noopener">在新标签页打开原件 ↗</a></div>';
+    /* 打印明文行挂在 .pdfwrap 之外（否则随 wrap 在 @media print 下一起被隐藏） */
+    var printLine=el("div","pdf-print","完整原件："+p.pdfUrl);
+    var frame=sec.querySelector(".pdfframe");
+    /* 判定：onload 触发 且 在 3000ms 内 -> 成功；超时未触发 -> 失败并回退。settled 与 frame.isConnected 双保险，
+       使旧视图被清理后回调一律 return，不存在跨视图误改 */
+    var settled=false;
+    var failTimer=setTimeout(function(){
+      failTimer=null;
+      if(settled)return;
+      settled=true;
+      if(!frame.isConnected)return;
+      console.warn("[liyinxin-portfolio] PDF 原件内嵌失败（3000ms 内未触发 iframe onload，可能因 X-Frame-Options / CSP frame-ancestors 拦截或网络失败），已回退至 imgs 图序："+p.pdfUrl);
+      if(sec.parentNode)sec.remove();
+      var note=el("div","pdf-fallback-note label");
+      note.textContent="原件内嵌受限，以下为已提取的作品图（第 5、6、10–14 页未含）";
+      figs.appendChild(note);
+      startImgFlow();
+      recapAll();
+    },3000);
+    frame.addEventListener("load",function(){
+      if(settled)return;
+      settled=true; /* 仅凭 onload 不足以判成功（CSP 拦截时部分浏览器也触发），按 brief 既定判定：onload 且 3000ms 内 -> 保留查看器 */
+      if(failTimer){clearTimeout(failTimer);failTimer=null;}
+    });
+    frame.src=p.pdfUrl; /* src 在 load 监听挂好之后再赋，避免缓存命中时事件早于监听 */
+    v._pdfCleanup=function(){ /* cleanupView 调用：撤销定时器 + 置 settled，杜绝「用户已跳走、3 秒后回调又把旧视图改一遍」 */
+      settled=true;
+      if(failTimer){clearTimeout(failTimer);failTimer=null;}
+    };
+    var figsNode=v.querySelector(".figs");
+    figsNode.parentNode.insertBefore(sec,figsNode);
+    v.insertBefore(printLine,figsNode);
+    finish(); /* PDF 路径下图序分屏不运行，「下一个项目」在此直接追加（state.nextAppended 守卫保证回退后不重复） */
+  }else{
+    startImgFlow();
+  }
+  return v;
+}
+
+/* ══ 路由 ══════════════════════════════════════════════ */
+/* 渲染宿主：自建 <main id="viewHost">，不带任何编辑锚点属性，使运行时内容不再挂靠在被画布
+   编辑层以 data-lvt-eid 锚定并做过静态快照的 #app 上（否则路由切换会被回滚成空壳）。
+   CSS 不新增选择器：自建 <main> 自动继承 main{...} 标签选择器样式。 */
+var appEl=document.getElementById("app");
+var host=document.createElement("main");
+host.id="viewHost";
+host.tabIndex=-1;
+if(appEl&&appEl.parentNode)appEl.parentNode.insertBefore(host,appEl);
+else document.body.appendChild(host);
+if(appEl){
+  appEl.style.transform="";   /* 清掉编辑层残留的拖拽 inline transform（-2.25px 偏移） */
+  appEl.style.display="none"; /* 退出布局，不再占用 min-height:100vh；不 remove（画布基础设施可能依赖该节点存在） */
+}
+/* 运行时自愈守卫：编辑层若再次给这两个节点注入 inline transform，立刻清空。
+   防死循环 = 回调内做值比较（仅当值非空且不等于 "none" 才写回空串），写回后条件不再成立，
+   自然收敛，无需 disconnect/重连；守卫因此可全程在线。异常一律静默降级。 */
+(function(){
+  if(!("MutationObserver" in window))return;
+  try{
+    var guard=new MutationObserver(function(records){
+      try{
+        for(var i=0;i<records.length;i++){
+          var n=records[i].target;
+          if(n!==appEl&&n!==host)continue;
+          var t=n.style.transform;
+          if(t&&t!=="none")n.style.transform="";
+        }
+      }catch(err){}
+    });
+    var opt={attributes:true,attributeFilter:["style","class"]};
+    guard.observe(host,opt);
+    if(appEl)guard.observe(appEl,opt);
+  }catch(err){} /* MutationObserver 不可用或抛错 -> 不影响主流程 */
+})();
+var currentView=null,currentKey="",currentRoute=null;
+function parseHash(){
+  var h=location.hash||"#/";
+  if(h==="#/"||h==="#"||h==="")return {key:"index",view:"index"};
+  if(h==="#/about")return {key:"about",view:"about"};
+  var m=h.match(/^#\/work\/([a-z0-9-]+)$/);
+  if(m){
+    for(var i=0;i<PROJECTS.length;i++)if(PROJECTS[i].slug===m[1])return {key:"work:"+m[1],view:"detail",idx:i};
+  }
+  return null;
+}
+function setTitle(r){
+  if(r.view==="index")document.title="李因炘 — 品牌/文创/平面";
+  else if(r.view==="about")document.title="关于 — 李因炘";
+  else document.title=PROJECTS[r.idx].name+" — 李因炘";
+}
+function markNav(r){
+  document.querySelectorAll(".navlink").forEach(function(a){
+    var route=a.getAttribute("data-route");
+    var cur=(route==="index"&&(r.view==="index"||r.view==="detail"))||(route==="about"&&r.view==="about");
+    if(cur)a.setAttribute("aria-current","page");else a.removeAttribute("aria-current");
+  });
+}
+function buildView(r){
+  if(r.view==="index")return viewIndex();
+  if(r.view==="about")return viewAbout();
+  return viewDetail(PROJECTS[r.idx],r.idx);
+}
+function cleanupView(v){
+  if(!v)return;
+  lbClose(); /* Interaction fix A2：切案例 / 路由变化时主动关闭并移除放大层，不带着上一个项目的图继续浏览 */
+  if(v._pdfCleanup)v._pdfCleanup(); /* PDF embed fix：先撤销 3000ms 判定定时器与 onload 回调效力，再动 DOM */
+  sweep(v); /* 移除旧视图前先兜底，避免残留半隐藏状态 */
+  v.querySelectorAll("[data-plx]").forEach(plxForget);
+  if(rvIO)v.querySelectorAll(".rv").forEach(function(n){rvIO.unobserve(n);});
+}
+function render(r){
+  setTitle(r);markNav(r);
+  lbClose(); /* Interaction fix A3：切案例先关放大层（cleanupView 只在有旧视图时调用，此处无条件补一道） */
+  currentRoute=r;
+  var nv=buildView(r);
+  var old=currentView;
+  currentView=nv;currentKey=r.key;
+  function mount(){
+    host.innerHTML="";
+    host.appendChild(nv);
+    bindReveals(nv); /* 先于 scrollTo / .enter：.pre 在任何一次强制样式解析前落定，杜绝「先可见再被裁掉」的闪烁 */
+    window.scrollTo(0,0);
+    if(!REDUCED){
+      nv.classList.add("enter");
+      requestAnimationFrame(function(){requestAnimationFrame(function(){nv.classList.remove("enter");});});
+    }
+    watchPlx(nv);
+    recapAll(); /* Revamp：挂载后布局落定，补算详情图的防模糊渲染宽度上限（buildView 阶段 clientWidth 为 0） */
+    requestAnimationFrame(function(){requestAnimationFrame(function(){recapAll();});});
+    host.focus({preventScroll:true});
+  }
+  if(old&&!REDUCED){
+    cleanupView(old);
+    old.classList.add("leave");
+    setTimeout(mount,280);
+  }else{
+    cleanupView(old);
+    mount();
+  }
+}
+function onRoute(){
+  var r=parseHash();
+  if(!r){location.replace("#/");return;}
+  if(r.key===currentKey)return;
+  render(r);
+}
+window.addEventListener("hashchange",onRoute);
+/* 导航兜底：捕获阶段委托 click，抵御编辑层吞掉 <a href="#/..."> 的原生跳转。
+   无条件注册（与 REDUCED 无关）；href 与当前 hash 相同时不干预，保持既有行为。 */
+document.addEventListener("click",function(e){
+  try{
+    var t=e.target;
+    if(!t||!t.closest)return;
+    if(t.closest(".lb"))return; /* Interaction fix：放大层内无任何路由链接，一律不干预（避开捕获阶段误处理） */
+    var a=t.closest('a[href^="#/"]');
+    if(!a)return;
+    var href=a.getAttribute("href");
+    if(!href)return;
+    if(href!==location.hash){
+      location.hash=href; /* 原生跳转被拦截时仍能切换路由 */
+      e.preventDefault();
+    }
+  }catch(err){}
+},{capture:true});
+onRoute();
+
+/* ══ Interaction fix A3：键盘导航（单个 document keydown，分层判定，放大层打开时优先级更高）══
+   层开着：← → = 当前案例 imgs 内翻图，首/末张停在边界不循环；Esc = 关闭。
+   层关着且当前在详情页：← → = 按 PROJECTS 顺序切案例、首尾循环（01↔03）；Esc 无操作。
+   首页/关于页：← → 无操作（不劫持浏览器行为）。
+   忽略：焦点在 input/textarea/select/contenteditable，或带 Ctrl/Meta/Alt 修饰键。
+   切案例后重置：分屏状态、state.nextAppended 守卫（均随新视图重建）、放大层关闭。 */
+document.addEventListener("keydown",function(e){
+  try{
+    if(e.ctrlKey||e.metaKey||e.altKey)return;
+    var k=e.key;
+    if(k!=="ArrowLeft"&&k!=="ArrowRight"&&k!=="Escape"&&k!=="Esc")return;
+    var t=e.target;
+    if(t){
+      var tn=(t.tagName||"").toLowerCase();
+      if(tn==="input"||tn==="textarea"||tn==="select"||t.isContentEditable)return;
+    }
+    if(LB){ /* 放大层开着：优先级更高 */
+      if(k==="Escape"||k==="Esc"){e.preventDefault();lbClose();}
+      else{e.preventDefault();lbStep(k==="ArrowRight"?1:-1);}
+      return;
+    }
+    if(k==="Escape"||k==="Esc")return; /* 层关着时 Esc 无操作 */
+    if(!currentRoute||currentRoute.view!=="detail")return; /* 首页/关于页不响应 */
+    e.preventDefault();
+    var n=PROJECTS.length;
+    var ni=((currentRoute.idx+(k==="ArrowRight"?1:-1))%n+n)%n; /* 首尾循环 01↔03 */
+    location.hash="#/work/"+PROJECTS[ni].slug;
+  }catch(err){}
+});
+
+/* ══ 自定义光标（仅 pointer:fine） ═════════════════════ */
+(function(){
+  if(REDUCED)return;
+  if(!window.matchMedia("(pointer: fine)").matches)return;
+  var cur=document.getElementById("cursor");
+  var tx=innerWidth/2,ty=innerHeight/2,x=tx,y=ty,last=performance.now();
+  window.addEventListener("pointermove",function(e){tx=e.clientX;ty=e.clientY;},{passive:true});
+  function loop(now){
+    var dt=Math.min(0.05,(now-last)/1000);last=now;
+    var k=1-Math.exp(-dt/0.12);
+    x+=(tx-x)*k;y+=(ty-y)*k;
+    cur.style.transform="translate3d("+(x-cur.offsetWidth/2)+"px,"+(y-cur.offsetHeight/2)+"px,0)";
+    requestAnimationFrame(loop);
+  }
+  requestAnimationFrame(loop);
+  function setState(target){
+    var isLink=!!(target&&target.closest&&target.closest("a,button,[data-cursor]"));
+    var isView=!!(target&&target.closest&&target.closest('[data-cursor="view"]'));
+    var isZoom=!!(target&&target.closest&&target.closest('[data-cursor="zoom"]')); /* Interaction fix A1：放大态 */
+    cur.classList.toggle("big",isLink);
+    cur.querySelector("span").style.opacity=isView?"1":"0";
+    var zw=cur.querySelector(".cur-zoom");
+    if(zw)zw.style.opacity=isZoom?"1":"0";
+  }
+  document.addEventListener("mouseover",function(e){setState(e.target);});
+  document.addEventListener("mouseout",function(e){if(!e.relatedTarget)setState(null);});
+})();
+</script>
+
+
+</body></html>
