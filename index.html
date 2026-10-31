@@ -672,6 +672,9 @@ img.img-fade.in{opacity:1;transition:opacity .4s ease}
 var BASE1="https://assets-persist.lovart.ai/pdf_extracts/975c49d81a26de11/images/";
 var BASE2="https://assets-persist.lovart.ai/pdf_extracts/8cbe68c459f38b4a/images/";
 var BASE3="https://assets-persist.lovart.ai/pdf_extracts/036a3fd987a7da61/images/";
+/* 图床配置：主 = 腾讯云 COS（国内节点，秒开）；回退链 = jsDelivr x2（境外）-> 本站相对路径（GitHub Pages 自带 CDN） */
+var IMG_CDN="https://cdn.jsdelivr.net/gh/xinaiyi521-eng/portfolio@66c72b7/";
+var IMG_FB=["https://gcore.jsdelivr.net/gh/xinaiyi521-eng/portfolio@66c72b7/"];
 
 var PROJECTS=[
 {slug:"wudao-chalin",name:"五大禅林",category:"文创视觉系统",metaLabel:"01 / 文创视觉系统",base:BASE1,
@@ -908,7 +911,15 @@ function makePh(url,ratio,alt,opts){
       if(opts.onRatio)opts.onRatio(r);
     }
   });
-  if(opts.onError)img.addEventListener("error",function(){opts.onError();}); /* 通用失败钩子（Revamp2 revert 后无调用方，不依赖 pages.confirmed） */
+  img.addEventListener("error",function(){
+    if(opts.onError)opts.onError();
+    /* 图床回退链：IMG_CDN（腾讯云）-> jsDelivr A/B（境外）-> 本站相对路径，逐级降级 */
+    if(opts.local){
+      var n=Number(this.dataset.fb||0);
+      var chain=[IMG_CDN,IMG_FB[0],IMG_FB[1],""].map(function(h){return h+opts.local;});
+      if(n<chain.length-1){this.dataset.fb=String(n+1);this.src=chain[n+1];}
+    }
+  });
   ph.appendChild(img);
   if(opts.hover){
     /* Interaction fix C：第二层 = 项目内另一张图（URL 从 imgs 数组取值，不另写），alt="" + aria-hidden="true" 纯装饰；
@@ -1146,7 +1157,7 @@ function lbOpen(p,idx,seq,trigger){
     n=Math.max(1,Math.min(total,n)); /* 首/末张停在边界不循环 */
     cur=n;
     var it=list[n-1];
-    var src=/^(https?:|images\/)/i.test(it[0])?it[0]:p.base+it[0]; /* 与 addFig 同一判定，逐字复用数组里的 URL */
+    var src=/^https?:/i.test(it[0])?it[0]:(/^images\//.test(it[0])?IMG_CDN+it[0]:p.base+it[0]); /* 与 addFig 同一判定，逐字复用数组里的 URL */
     var alt=(it[2]!=null)?it[2]:(p.name+" 作品图 "+n);
     img.alt=alt;
     paint();
@@ -1274,8 +1285,8 @@ function viewIndex(){
        DOM 里先只写 data-hover-src，首次 mouseenter / focusin 时才赋 src（首屏零额外请求）；两层均在 transform 容器内 */
     var hIt=(p.imgs&&p.imgs[COVER_HOVER[i]])||null;
     var hSrc=null;
-    if(hIt)hSrc=/^(https?:|images\/)/i.test(hIt[0])?hIt[0]:p.base+hIt[0];
-    cover.appendChild(makePh(p.coverPage.url,p.coverPage.ratio,p.coverPage.alt,{clip:true,eager:i===0,rv:true,hover:hSrc}));
+    if(hIt)hSrc=/^https?:/i.test(hIt[0])?hIt[0]:(/^images\//.test(hIt[0])?IMG_CDN+hIt[0]:p.base+hIt[0]);
+    cover.appendChild(makePh(IMG_CDN+p.coverPage.url,p.coverPage.ratio,p.coverPage.alt,{clip:true,eager:true,rv:true,hover:hSrc,local:p.coverPage.url}));
     cover.setAttribute("data-plx","");
     a.appendChild(cover);
     list.appendChild(a);
@@ -1345,8 +1356,8 @@ function viewDetail(p,idx){
     var it=imgList[seq-1];
     var fig=el("figure","fig");
     var alt=(it[2]!=null)?it[2]:(p.name+" 作品图 "+seq);
-    var src=/^(https?:|images\/)/i.test(it[0])?it[0]:p.base+it[0]; /* Final pages fix：支持数组内写绝对 URL（案例 01 图源在 a.lovart.ai 域，与 p.base 不同域）；02/03 仍是裸文件名，走拼接分支，行为逐字不变 */
-    var phNode=makePh(src,it[1],alt,{cap:true,eager:seq<=2});
+    var src=/^https?:/i.test(it[0])?it[0]:(/^images\//.test(it[0])?IMG_CDN+it[0]:p.base+it[0]); /* Final pages fix：支持数组内写绝对 URL（案例 01 图源在 a.lovart.ai 域，与 p.base 不同域）；02/03 仍是裸文件名，走拼接分支，行为逐字不变 */
+    var phNode=makePh(src,it[1],alt,{cap:true,eager:seq<=6,local:/^images\//.test(it[0])?it[0]:undefined});
     fig.appendChild(phNode);
     /* Interaction fix A1：.ph 之上叠一个纯透明 button（无任何可见装饰），aria-label 逐字 = 「放大查看：」+ 该图现有 alt */
     var zb=el("button","fig-zoom");
